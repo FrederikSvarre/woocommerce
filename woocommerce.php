@@ -76,11 +76,9 @@ class Woocommerce {
 	 */
 	function __construct() {
 
-		// Start a PHP session - uses a unqiue session name for this install
-		if ( ! session_id() ) {
-			session_name( 'PHPSESSID_' . substr( md5( get_bloginfo('name') ), 0, 6 ) );
+		// Start a PHP session, if not yet started
+		if ( ! session_id() )
 			session_start();
-		}
 		
 		// Define version constant
 		define( 'WOOCOMMERCE_VERSION', $this->version );
@@ -586,7 +584,7 @@ class Woocommerce {
 	            'labels' => array(
 	                    'name' 				=> __( 'Product Categories', 'woocommerce'),
 	                    'singular_name' 	=> __( 'Product Category', 'woocommerce'),
-						'menu_name'			=> _x( 'Product Categories', 'Admin menu name', 'woocommerce' ),
+						'menu_name'			=> _x( 'Categories', 'Admin menu name', 'woocommerce' ),
 	                    'search_items' 		=> __( 'Search Product Categories', 'woocommerce'),
 	                    'all_items' 		=> __( 'All Product Categories', 'woocommerce'),
 	                    'parent_item' 		=> __( 'Parent Product Category', 'woocommerce'),
@@ -615,7 +613,7 @@ class Woocommerce {
 	            'update_count_callback' => '_update_post_term_count',
 	            'label' 				=> __( 'Product Tags', 'woocommerce'),
 	            'labels' => array(
-	                    'name' 				=> __( 'Tags', 'woocommerce'),
+	                    'name' 				=> __( 'Product Tags', 'woocommerce'),
 	                    'singular_name' 	=> __( 'Product Tag', 'woocommerce'),
 						'menu_name'			=> _x( 'Tags', 'Admin menu name', 'woocommerce' ),
 	                    'search_items' 		=> __( 'Search Product Tags', 'woocommerce'),
@@ -782,6 +780,11 @@ class Woocommerce {
 			)
 		);
 		
+		// Sort out attachment urls
+		$attachment_base = get_option('woocommerce_prepend_shop_page_to_products') == 'yes' ? trailingslashit( $base_slug ) : trailingslashit( _x( 'product', 'slug', 'woocommerce' ) );
+		
+		add_rewrite_rule( '^' . $attachment_base . '([^/]*)/([^/]*)/([^/]*)/?', 'index.php?attachment=$matches[3]', 'top' );
+		
 		register_post_type( "product_variation",
 			array(
 				'labels' => array(
@@ -822,25 +825,10 @@ class Woocommerce {
 				'show_in_nav_menus' 	=> false
 			)
 		);
-	    
-
-	        
-		if ( false === ( $order_count = get_transient( 'woocommerce_processing_order_count' ) ) ) {
-			$order_statuses = get_terms( 'shop_order_status' );
-		    $order_count = false;
-		    foreach ( $order_statuses as $status ) {
-		        if( $status->slug === 'processing' ) {
-		            $order_count += $status->count;
-		            break;
-		        }
-		    }
-		    $order_count = apply_filters( 'woocommerce_admin_menu_count', intval( $order_count ) );
-			set_transient( 'woocommerce_processing_order_count', $order_count );
-		}
-	        
+	            
 		$menu_name = _x('Orders', 'Admin menu name', 'woocommerce');
-		if ( $order_count ) {
-			$menu_name .= " <span class='awaiting-mod count-$order_count'><span class='processing-count'>" . number_format_i18n( $order_count ) . "</span></span>" ;
+		if ( $order_count = woocommerce_processing_order_count() ) {
+			$menu_name .= " <span class='awaiting-mod update-plugins count-$order_count'><span class='processing-count'>" . number_format_i18n( $order_count ) . "</span></span>" ;
 		}
 
 	    register_post_type( "shop_order",
@@ -1372,6 +1360,28 @@ class Woocommerce {
 				setcookie( "woocommerce_items_in_cart", "1", 0, COOKIEPATH, COOKIE_DOMAIN, false );
 			else 
 				setcookie( "woocommerce_items_in_cart", "0", time() - 3600, COOKIEPATH, COOKIE_DOMAIN, false );
+		}
+	}
+
+	/**
+	 * mfunc_wrapper function.
+	 *
+	 * Wraps a function in mfunc to keep it dynamic. 
+	 * If running WP Super Cache this checks for late_init (because functions calling this require WP to be loaded)
+	 * 
+	 * @access public
+	 * @param mixed $function
+	 * @return void
+	 */
+	function mfunc_wrapper( $mfunction, $function, $args ) {
+		global $wp_super_cache_late_init;
+		
+		if ( is_null( $wp_super_cache_late_init ) || $wp_super_cache_late_init == 1 ) {
+			echo '<!--mfunc ' . $mfunction . ' -->';
+			$function( $args );
+			echo '<!--/mfunc-->';
+		} else {
+			$function( $args );
 		}
 	}
 		

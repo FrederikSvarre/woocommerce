@@ -150,6 +150,32 @@ Yes you can! Join in on our [GitHub repository](http://github.com/woothemes/wooc
 
 == Changelog ==
 
+= 1.6.2 - 20/07/2012 =
+* Feature - Added google analytics event tracking for add to cart buttons (thanks to Max Rice)
+* Feature - WC_Product::has_file() for detecting if a downloadable product has a file set
+* Feature - Store customer IP and UA on purchase
+* Tweak - Hide admin order comments box if they are disabled
+* Tweak - Added mini-cart.php template for the cart widget output
+* Tweak - Simplified the product data write panels
+* Tweak - woocommerce_reset_loop() on loop_end to reset columns and index
+* Tweak - Added US Zip Code validation
+* Tweak - Event handling for checkout fields
+* Tweak - wp_reset_postdata instead of wp_reset_query in product page loops
+* Tweak - Option to enable coupon form on cart
+* Tweak - Coupon codes added to order notes when used (thanks Max Rice)
+* Tweak - Shipping calculator state box improvements
+* Tweak - Added date to admin order notification
+* Tweak - Formatted addresses in emails in a table to maintain appearance when printing
+* Tweak - Better support for supercache - detect late_init or don't cache
+* Tweak - Added generate_title_html() to settings API
+* Tweak - PayPal standard: No longer using shipping_1 because a) paypal ignore it if *any* shipping rules are within paypal, b) paypal ignore anyhing over 5 digits, so 999.99 is the max
+* Fix - Removed session_name from 1.6 to prevent issues when other plugins start a session first. Instead, added a KB article on how to do it manually (if needed, this is an edge case) - http://wcdocs.woothemes.com/codex/extending/multiple-installs-on-one-domain-sessions-conflictsession-sharing-workaround/
+* Fix - Product categories shortcode loop
+* Fix - selected state for variation options
+* Localization - Rescan all language strings and updated .po and .mo files for next release
+* Localization - Added Romanian translation (by silviu-bucsa)
+* Localization - Updated Swedish translation by Patric Liljestrand
+
 = 1.6.1 - 19/07/2012 =
 * Fix - Minor issue with woocommerce_content() - updated to new template system
 * Fix - Wrapped the deprecated content functions in function_exists
@@ -207,7 +233,7 @@ Yes you can! Join in on our [GitHub repository](http://github.com/woothemes/wooc
 * Tweak - Pay page woocommerce_pay hidden input so we can use javascript to submit the form
 * Tweak - Hooks for order statuses in reports
 * Tweak - Extra hooks in some templates
-* Fix - Remove depreciated ereg_replace in validation class
+* Fix - Remove deprecated ereg_replace in validation class
 * Fix - strpos warning in shipping class
 * Fix - $query instead of $q in query class
 * Fix - Visibility setting for products in widgets
@@ -608,7 +634,7 @@ Yes you can! Join in on our [GitHub repository](http://github.com/woothemes/wooc
 * Other minor fixes
 
 = 1.4.1 - 01/02/2012 = 
-* Depreciated tax class fix
+* Deprecated tax class fix
 * Logout error fix
 * get_shipping_tax_rate deprecated to stop errors
 * get_attribute returns non-linked terms
@@ -958,8 +984,8 @@ Yes you can! Join in on our [GitHub repository](http://github.com/woothemes/wooc
 
 == Upgrade Notice ==
 
-= 1.6 =
-1.6 introduces some template changes, for loops in particular. See the changelog for details and ensure theme compatibility before upgrading.
+= 1.6.2 =
+1.6 introduced some template changes, for loops in particular. See the changelog for details and ensure theme compatibility before upgrading.
 
 = 1.5.4 =
 Please update your shipping methods after upgrading - the save hooks have been modified to ensure settings are saved more reliably. 

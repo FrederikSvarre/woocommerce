@@ -159,15 +159,6 @@ if ( ! function_exists( 'woocommerce_get_sidebar' ) ) {
 }
 
 /**
- * Prevent Cache
- **/
-if ( ! function_exists( 'woocommerce_prevent_sidebar_cache' ) ) {
-	function woocommerce_prevent_sidebar_cache( $sidebar  ) {
-		echo '<!--mfunc get_sidebar( "' . $sidebar . '" ) --><!--/mfunc-->';
-	}
-}
-
-/**
  * Demo Banner
  *
  * Adds a demo store banner to the site if enabled
@@ -203,6 +194,13 @@ if ( ! function_exists( 'woocommerce_template_loop_price' ) ) {
 if ( ! function_exists( 'woocommerce_show_product_loop_sale_flash' ) ) {
 	function woocommerce_show_product_loop_sale_flash() {
 		woocommerce_get_template( 'loop/sale-flash.php' );
+	}
+}
+if ( ! function_exists( 'woocommerce_reset_loop' ) ) {
+	function woocommerce_reset_loop() {
+		global $woocommerce_loop;
+		// Reset loop/columns globals when starting a new loop
+		$woocommerce_loop['loop'] = $woocommerce_loop['column'] = '';
 	}
 }
 
@@ -464,6 +462,24 @@ if ( ! function_exists( 'woocommerce_cart_totals' ) ) {
 if ( ! function_exists( 'woocommerce_cross_sell_display' ) ) {
 	function woocommerce_cross_sell_display() {
 		woocommerce_get_template( 'cart/cross-sells.php' );
+	}
+}
+
+/** Mini-Cart *************************************************************/
+
+/**
+ * Mini-cart template - used by cart widget
+ **/
+if ( ! function_exists( 'woocommerce_mini_cart' ) ) {
+	function woocommerce_mini_cart( $args = array() ) {
+		
+		$defaults = array(
+			'list_class' => ''
+		);
+
+		$args = wp_parse_args( $args, $defaults );
+		
+		woocommerce_get_template( 'cart/mini-cart.php', $args );
 	}
 }
 

@@ -356,7 +356,7 @@ class WC_Order {
 		return apply_filters( 'woocommerce_order_amount_line_tax', number_format( $item['line_tax'], 2, '.', '') );
 	}
 	
-	/** Depreciated functions */
+	/** Deprecated functions */
 	
 	function get_order_total() {
 		return apply_filters( 'woocommerce_order_amount_total', $this->order_total );
@@ -670,11 +670,11 @@ class WC_Order {
 	/** Gets a downloadable products file url */
 	function get_downloadable_file_url( $item_id, $variation_id ) {
 	 	
-	 	$download_id = ($variation_id>0) ? $variation_id : $item_id;
+	 	$download_id = $variation_id > 0 ? $variation_id : $item_id;
 	 	
 	 	$user_email = $this->billing_email;
 				
-	 	return add_query_arg('download_file', $download_id, add_query_arg('order', $this->order_key, add_query_arg('email', $user_email, trailingslashit( home_url() ))));
+	 	return add_query_arg( 'download_file', $download_id, add_query_arg( 'order', $this->order_key, add_query_arg( 'email', $user_email, trailingslashit( home_url() ) ) ) );
 	 }
 	 
 	/**
@@ -1082,7 +1082,7 @@ class order_item_meta {
 	
 }
 
-/** Depreciated */
+/** Deprecated */
 class woocommerce_order extends WC_Order {
 	public function __construct( $id = '' ) { 
 		parent::__construct( $id ); 

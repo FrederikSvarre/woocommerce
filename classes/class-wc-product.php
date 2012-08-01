@@ -270,6 +270,17 @@ class WC_Product {
 	}
 	
 	/**
+	 * Checks if a downloadable product has a file attached to it
+	 */
+	function has_file() {
+		if ( ! $this->is_downloadable() )
+			return false;
+			
+		if ( apply_filters( 'woocommerce_file_download_path', get_post_meta( $this->id, '_file_path', true ), $this->id ) )
+			return true;
+	}
+	
+	/**
 	 * Checks if a product is virtual (has no shipping)
 	 */
 	function is_virtual() {
@@ -953,7 +964,7 @@ class WC_Product {
 		));
 	}
 	
-	/** Depreciated - naming was confusing */
+	/** Deprecated - naming was confusing */
 	function get_available_attribute_variations() {
 		_deprecated_function( 'get_available_attribute_variations', '1.5.7', 'get_variation_attributes' );
 		return $this->get_variation_attributes();
@@ -1231,12 +1242,15 @@ class WC_Product {
 		update_post_meta( $this->id, '_min_variation_sale_price', $this->min_variation_sale_price );
 		update_post_meta( $this->id, '_max_variation_sale_price', $this->max_variation_sale_price );
 		
-		if ( $this->min_variation_price !== '' ) $woocommerce->clear_product_transients( $this->id );
+		$this->price = $this->min_variation_price;
+		
+		if ( $this->min_variation_price !== '' ) 
+			$woocommerce->clear_product_transients( $this->id );
 	}
 	
 }
 
-/** Depreciated */
+/** Deprecated */
 class woocommerce_product extends WC_Product {
 	public function __construct( $id ) { 
 		_deprecated_function( 'woocommerce_product', '1.4', 'WC_Product()' );

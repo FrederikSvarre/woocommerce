@@ -13,7 +13,7 @@ jQuery(document).ready(function($) {
             var val1 = attrs1[name];
             var val2 = attrs2[name];
             
-            if(val1.length != 0 && val2.length != 0 && val1 != val2) {
+            if ( val1 !== undefined && val2 !== undefined && val1.length != 0 && val2.length != 0 && val1 != val2 ) {
                 match = false;
             }
         }
@@ -138,7 +138,7 @@ jQuery(document).ready(function($) {
         	$('.single_variation_wrap').find('.quantity').hide();
         }
 
-        $('.single_variation_wrap').slideDown('200').trigger('variationWrapShown').trigger('show_variation'); // depreciated variationWrapShown
+        $('.single_variation_wrap').slideDown('200').trigger('variationWrapShown').trigger('show_variation'); // deprecated variationWrapShown
     }
 	
 	//when one of attributes is changed - check everything to show only valid options
