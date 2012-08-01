@@ -36,10 +36,16 @@ wp_delete_post( get_option('woocommerce_change_password_page_id'), true );
 wp_delete_post( get_option('woocommerce_pay_page_id'), true );
 wp_delete_post( get_option('woocommerce_thanks_page_id'), true );
 
+// mijireh checkout page
+if ( $mijireh_page = get_page_by_path( 'mijireh-secure-checkout' ) ) 
+	wp_delete_post( $mijireh_page->ID, true );
+
 // Tables
-$wpdb->query("DROP TABLE IF EXISTS ".$wpdb->prefix."woocommerce_attribute_taxonomies");
-$wpdb->query("DROP TABLE IF EXISTS ".$wpdb->prefix."woocommerce_downloadable_product_permissions");
-$wpdb->query("DROP TABLE IF EXISTS ".$wpdb->prefix."woocommerce_termmeta");
+$wpdb->query( "DROP TABLE IF EXISTS " . $wpdb->prefix . "woocommerce_attribute_taxonomies" );
+$wpdb->query( "DROP TABLE IF EXISTS " . $wpdb->prefix . "woocommerce_downloadable_product_permissions" );
+$wpdb->query( "DROP TABLE IF EXISTS " . $wpdb->prefix . "woocommerce_termmeta" );
+$wpdb->query( "DROP TABLE IF EXISTS " . $wpdb->base_prefix . "shareyourcart_tokens" );
+$wpdb->query( "DROP TABLE IF EXISTS " . $wpdb->base_prefix . "shareyourcart_coupons" );
 
 // Delete options
 $wpdb->query("DELETE FROM $wpdb->options WHERE option_name LIKE 'woocommerce_%';");

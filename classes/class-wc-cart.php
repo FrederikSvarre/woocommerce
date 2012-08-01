@@ -51,6 +51,7 @@ class WC_Cart {
 		$this->get_cart_from_session();
 		
 		add_action('woocommerce_check_cart_items', array(&$this, 'check_cart_items'), 1);
+		add_action('woocommerce_check_cart_items', array(&$this, 'check_cart_coupons'), 1);
 		add_action('woocommerce_after_checkout_validation', array(&$this, 'check_customer_coupons'), 1);
     }
 
@@ -88,7 +89,7 @@ class WC_Cart {
 							'variation' 	=> $values['variation'],
 							'quantity' 		=> $values['quantity'],
 							'data'			=> $_product
-						), $values );
+						), $values, $key );
 	
 					}
 				}
@@ -229,6 +230,29 @@ class WC_Cart {
 			
 			if (is_wp_error($result)) 
 				$woocommerce->add_error( $result->get_error_message() );
+		}
+		
+		/**
+		 * Check cart coupons for errors
+		 */
+		function check_cart_coupons() {
+			global $woocommerce;
+			
+			if ( ! empty( $this->applied_coupons ) ) {
+				foreach ( $this->applied_coupons as $key => $code ) {
+					$coupon = new WC_Coupon( $code );
+					
+					if ( is_wp_error( $coupon->is_valid() ) ) {
+						
+						$woocommerce->add_error( sprintf( __('Sorry, it seems the coupon "%s" is invalid - it has now been removed from your order.', 'woocommerce'), $code ) );
+						
+						// Remove the coupon
+						unset( $this->applied_coupons[$key] );
+						$_SESSION['coupons'] = $this->applied_coupons;
+						$_SESSION['refresh_totals'] = true;
+					}
+				}
+			}
 		}
 		
 		/**
@@ -400,15 +424,15 @@ class WC_Cart {
 		            	$value = ucfirst( $value );
 					}
 					
-					if ($flat)
+					if ( $flat )
 						$variation_list[] = $woocommerce->attribute_label( str_replace( 'attribute_', '', $name ) ) . ': ' . $value;
 					else
-						$variation_list[] = '<dt>'.$woocommerce->attribute_label( str_replace( 'attribute_', '', $name ) ) . ':</dt><dd>' . $value . '</dd>';
+						$variation_list[] = '<dt>' . $woocommerce->attribute_label( str_replace( 'attribute_', '', $name ) ) . ':</dt><dd>' . $value . '</dd>';
 					
 				}
 				
 				if ($flat)
-					$return .= implode( ', ', $variation_list );
+					$return .= implode( ", \n", $variation_list );
 				else
 					$return .= implode( '', $variation_list );
 				
@@ -530,9 +554,25 @@ class WC_Cart {
 			}
 			
 			return $merged_taxes;
-		}	
+		}
 		
- 	/*-----------------------------------------------------------------------------------*/
+		/**
+		 * Returns the cart and shipping taxes, merged & formatted
+		 * 
+		 * @return array merged taxes
+		 */
+		function get_formatted_taxes() {
+
+			$taxes = $this->get_taxes();
+
+			foreach ( $taxes as $key => $tax )
+				if ( $tax > 0 )
+					$taxes[$key] = woocommerce_price( $tax );
+
+			return apply_filters( 'woocommerce_cart_formatted_taxes', $taxes, $this );
+		}
+
+	/*-----------------------------------------------------------------------------------*/
 	/* Add to cart handling */
 	/*-----------------------------------------------------------------------------------*/ 
 	
@@ -615,6 +655,10 @@ class WC_Cart {
 			else
 				$product_data = new WC_Product( $product_id );
 			
+			// Force quantity to 1 if sold individually
+			if ( $product_data->is_sold_individually() )
+				$quantity = 1;
+			
 			// Type/Exists check
 			if ( $product_data->is_type('external') || ! $product_data->exists() ) {
 				$woocommerce->add_error( __('This product cannot be purchased.', 'woocommerce') );
@@ -635,11 +679,13 @@ class WC_Cart {
 				$woocommerce->add_error( __('You cannot add that product to the cart since the product is out of stock.', 'woocommerce') );
 				return false;
 			}
-			
+
 			// Downloadable/virtual qty check
-			if ( get_option('woocommerce_limit_downloadable_product_qty')=='yes' && $product_data->is_downloadable() && $product_data->is_virtual() ) {
-				$qty = ( $cart_item_key ) ? $this->cart_contents[$cart_item_key]['quantity'] + $quantity : $quantity;
-				if ( $qty > 1 ) {
+			if ( $product_data->is_sold_individually() ) {
+				$in_cart_quantity = ( $cart_item_key ) ? $this->cart_contents[$cart_item_key]['quantity'] + $quantity : $quantity;
+				
+				// If its greater than 1, its already in the cart
+				if ( $in_cart_quantity > 1 ) {
 					$woocommerce->add_error( sprintf('<a href="%s" class="button">%s</a> %s', get_permalink(woocommerce_get_page_id('cart')), __('View Cart &rarr;', 'woocommerce'), __('You already have this item in your cart.', 'woocommerce') ) );
 					return false;
 				}
@@ -710,6 +756,7 @@ class WC_Cart {
 		function set_quantity( $cart_item_key, $quantity = 1 ) {
 		
 			if ( $quantity == 0 || $quantity < 0 ) {
+				do_action( 'woocommerce_before_cart_item_quantity_zero', $cart_item_key );
 				unset( $this->cart_contents[$cart_item_key] );
 			} else {
 				$this->cart_contents[$cart_item_key]['quantity'] = $quantity;
@@ -967,12 +1014,13 @@ class WC_Cart {
 								$this->discount_total = $this->discount_total + ( $discount_amount * $values['quantity'] );
 								
 							} elseif ( $coupon->type == 'percent_product' ) {
-								$this->discount_total = $this->discount_total + ( $price / 100 ) * $coupon->amount;
+								$this->discount_total = $this->discount_total + round( ( $price / 100 ) * $coupon->amount, 2 );
 							}
 						}
 					}
 				}
 			}
+						
 		}
 		
 		/**
@@ -1002,7 +1050,7 @@ class WC_Cart {
 								
 								$percent_discount = ( round( $this->cart_contents_total + $this->tax_total , 2 ) / 100 ) * $coupon->amount;
 								
-								$this->discount_total = $this->discount_total + $percent_discount;
+								$this->discount_total = $this->discount_total + round( $percent_discount, 2 );
 								
 							break;
 							
@@ -1047,8 +1095,8 @@ class WC_Cart {
 							
 							// ADJUST BASE if tax rate is different (different region or modified tax class)
 							if ( $tax_rates !== $base_tax_rates ) {
-							
-								$base_taxes			= $this->tax->calc_tax( $row_base_price, $base_tax_rates, true );
+								
+								$base_taxes			= $this->tax->calc_tax( $row_base_price, $base_tax_rates, true, true );
 								$modded_taxes		= $this->tax->calc_tax( $row_base_price - array_sum($base_taxes), $tax_rates, false );
 								$row_base_price 	= ( $row_base_price - array_sum( $base_taxes ) ) + array_sum( $modded_taxes );
 								
@@ -1116,21 +1164,21 @@ class WC_Cart {
 						if ( $_product->is_taxable() ) {
 							
 							// Get rates
-							$tax_rates			 		= $this->tax->get_rates( $_product->get_tax_class() );
-		
+							$tax_rates			 	= $this->tax->get_rates( $_product->get_tax_class() );
+							
 							/**
-							 * ADJUST TAX - Checkout calculations when customer is OUTSIDE the shop base country and prices INCLUDE tax
+							 * ADJUST TAX - Calculations when customer is OUTSIDE the shop base country/state and prices INCLUDE tax
 							 * 	OR
-							 * ADJUST TAX - Checkout calculations when a tax class is modified
+							 * ADJUST TAX - Calculations when a tax class is modified
 							 */
-							if ( ( $woocommerce->customer->is_customer_outside_base() && defined('WOOCOMMERCE_CHECKOUT') ) || ( $_product->get_tax_class() !== $_product->tax_class ) ) {
+							if ( ( $woocommerce->customer->is_customer_outside_base() && ( defined('WOOCOMMERCE_CHECKOUT') || $woocommerce->customer->has_calculated_shipping() ) ) || ( $_product->get_tax_class() !== $_product->tax_class ) ) {
 								
 								// Get tax rate for the store base, ensuring we use the unmodified tax_class for the product
 								$base_tax_rates 		= $this->tax->get_shop_base_rate( $_product->tax_class );
 								
 								// Work out new price based on region
 								$row_base_price 		= $base_price * $values['quantity'];
-								$base_taxes				= $this->tax->calc_tax( $row_base_price, $base_tax_rates, true );
+								$base_taxes				= $this->tax->calc_tax( $row_base_price, $base_tax_rates, true, true ); // Unrounded
 								$taxes					= $this->tax->calc_tax( $row_base_price - array_sum($base_taxes), $tax_rates, false );
 								
 								// Tax amount
@@ -1186,7 +1234,7 @@ class WC_Cart {
 											
 						// Line prices
 						$line_tax = ( get_option('woocommerce_tax_round_at_subtotal') == 'no' ) ? round( $discounted_tax_amount, 2 ) : $discounted_tax_amount;
-						$line_total 		= ( $discounted_price * $values['quantity'] ) - round( $line_tax, 2 );
+						$line_total 		= round( ( $discounted_price * $values['quantity'] ) - round( $line_tax, 2 ), 2 );
 												
 						// Add any product discounts (after tax)
 						$this->apply_product_discounts_after_tax( $values, $line_total + $discounted_tax_amount );
@@ -1297,7 +1345,7 @@ class WC_Cart {
 			
 			// Allow plugins to hook and alter totals before final total is calculated
 			do_action( 'woocommerce_calculate_totals', $this );			
-					
+
 			/** 
 			 * Grand Total
 			 *
@@ -1368,6 +1416,7 @@ class WC_Cart {
 			
 			$packages[0]['contents'] 				= $this->get_cart();	// Items in the package
 			$packages[0]['contents_cost'] 			= 0;					// Cost of items in the package
+			$packages[0]['applied_coupons']			= $this->applied_coupons; // Applied coupons - some, like free shipping, affect costs
 			$packages[0]['destination']['country'] 	= $woocommerce->customer->get_shipping_country();
 			$packages[0]['destination']['state'] 	= $woocommerce->customer->get_shipping_state();
 			$packages[0]['destination']['postcode'] = $woocommerce->customer->get_shipping_postcode();
@@ -1414,8 +1463,8 @@ class WC_Cart {
 			if ( ! is_array( $this->cart_contents ) ) return false;
 			
 			if ( get_option( 'woocommerce_shipping_cost_requires_address' ) == 'yes' ) {
-				if ( empty( $_SESSION['calculated_shipping'] ) ) {
-					if ( ! $woocommerce->customer->get_shipping_country() || ! $woocommerce->customer->get_shipping_state() ) return false;
+				if ( ! $woocommerce->customer->has_calculated_shipping() ) {
+					if ( ! $woocommerce->customer->get_shipping_country() || ( ! $woocommerce->customer->get_shipping_state() && ! $woocommerce->customer->get_shipping_postcode() ) ) return false;
 				}
 			}
 		
@@ -1513,8 +1562,9 @@ class WC_Cart {
 			if ( $the_coupon->id ) {
 				
 				// Check it can be used with cart
-				if ( ! $the_coupon->is_valid() ) {
-					$woocommerce->add_error( __('Invalid coupon.', 'woocommerce') );
+				$return = $the_coupon->is_valid();
+				if ( ! $return || is_wp_error( $return ) ) {
+					$woocommerce->add_error( is_wp_error( $return ) ? $return->get_error_message() : __('Invalid coupon.', 'woocommerce') );
 					return false;
 				}
 				
@@ -1616,7 +1666,7 @@ class WC_Cart {
 		 * @return string formatted price
 		 */
 		function get_total() {
-			return woocommerce_price( $this->total );
+			return apply_filters( 'woocommerce_cart_total', woocommerce_price( $this->total ) );
 		}
 		
 		/**
@@ -1627,7 +1677,7 @@ class WC_Cart {
 		function get_total_ex_tax() {
 			$total = $this->total - $this->tax_total - $this->shipping_tax_total;
 			if ( $total < 0 ) $total = 0;
-			return woocommerce_price( $total );
+			return apply_filters( 'woocommerce_cart_total_ex_tax', woocommerce_price( $total ) );
 		}
 		
 		/**
@@ -1637,10 +1687,12 @@ class WC_Cart {
 		 */
 		function get_cart_total() {
 			if ( ! $this->prices_include_tax ) {
-				return woocommerce_price( $this->cart_contents_total );
+				$cart_contents_total = woocommerce_price( $this->cart_contents_total );
 			} else {
-				return woocommerce_price( $this->cart_contents_total + $this->tax_total );
+				$cart_contents_total = woocommerce_price( $this->cart_contents_total + $this->tax_total );
 			}
+
+			return apply_filters( 'woocommerce_cart_contents_total', $cart_contents_total );
 		}
 		
 		/**
@@ -1656,32 +1708,31 @@ class WC_Cart {
 			// cart + shipping + non-compound taxes (after discount)
 			if ( $compound ) {
 				
-				return woocommerce_price( $this->cart_contents_total + $this->shipping_total + $this->get_taxes_total( false ) );
+				$cart_subtotal = woocommerce_price( $this->cart_contents_total + $this->shipping_total + $this->get_taxes_total( false ) );
 			
 			// Otherwise we show cart items totals only (before discount)
 			} else {
 			
 				// Display ex tax if the option is set, or prices exclude tax
-				if ($this->display_totals_ex_tax || !$this->prices_include_tax ) {
+				if ( $this->display_totals_ex_tax || ! $this->prices_include_tax || $woocommerce->customer->is_vat_exempt() ) {
+
+					$cart_subtotal = woocommerce_price( $this->subtotal_ex_tax );
 					
-					$return = woocommerce_price( $this->subtotal_ex_tax );
-					
-					if ( $this->tax_total>0 && $this->prices_include_tax ) {
-						$return .= ' <small>'.$woocommerce->countries->ex_tax_or_vat().'</small>';
+					if ( $this->tax_total > 0 && $this->prices_include_tax ) {
+						$cart_subtotal .= ' <small>' . $woocommerce->countries->ex_tax_or_vat() . '</small>';
 					}
-					return $return;
 					
 				} else {
 					
-					$return = woocommerce_price( $this->subtotal );
+					$cart_subtotal = woocommerce_price( $this->subtotal );
 					
-					if ( $this->tax_total>0 && !$this->prices_include_tax ) {
-						$return .= ' <small>'.$woocommerce->countries->inc_tax_or_vat().'</small>';
+					if ( $this->tax_total > 0 && !$this->prices_include_tax ) {
+						$cart_subtotal .= ' <small>' . $woocommerce->countries->inc_tax_or_vat() . '</small>';
 					}
-					return $return;
-				
 				}
 			}
+
+			return apply_filters( 'woocommerce_cart_subtotal', $cart_subtotal, $compound, $this );
 		}
 		
 		/** 
@@ -1706,31 +1757,31 @@ class WC_Cart {
 			// Taxable
 			if ( $taxable ) {
 	
-				if ( $this->display_cart_ex_tax && $this->prices_include_tax ) {
+				if ( ( $this->display_cart_ex_tax || $woocommerce->customer->is_vat_exempt() ) && $this->prices_include_tax ) {
 							
 					$base_taxes 		= $this->tax->calc_tax( $price * $quantity, $base_tax_rates, true );
 					$base_tax_amount	= array_sum( $base_taxes );
 					
 					$row_price 			= ( $price * $quantity ) - $base_tax_amount;
 					
-					$return = woocommerce_price( $row_price );
-					$return .= ' <small class="tax_label">' . $woocommerce->countries->ex_tax_or_vat() . '</small>';
+					$product_subtotal = woocommerce_price( $row_price );
+					$product_subtotal .= ' <small class="tax_label">' . $woocommerce->countries->ex_tax_or_vat() . '</small>';
 				
 				} elseif ( ! $this->display_cart_ex_tax && $tax_rates !== $base_tax_rates && $this->prices_include_tax ) {
 					
-					$base_taxes			= $this->tax->calc_tax( $price * $quantity, $base_tax_rates, true );
+					$base_taxes			= $this->tax->calc_tax( $price * $quantity, $base_tax_rates, true, true );
 					$modded_taxes		= $this->tax->calc_tax( ( $price * $quantity ) - array_sum( $base_taxes ), $tax_rates, false );
 					$row_price 			= (( $price * $quantity ) - array_sum( $base_taxes )) + array_sum( $modded_taxes );
 					
-					$return = woocommerce_price( $row_price );
+					$product_subtotal = woocommerce_price( $row_price );
 					if ( ! $this->prices_include_tax ) {
-						$return .= ' <small class="tax_label">' . $woocommerce->countries->inc_tax_or_vat() . '</small>';
+						$product_subtotal .= ' <small class="tax_label">' . $woocommerce->countries->inc_tax_or_vat() . '</small>';
 					}
 				
 				} else {
 					
 					$row_price = $price * $quantity;
-					$return = woocommerce_price( $row_price );
+					$product_subtotal = woocommerce_price( $row_price );
 				
 				}
 			
@@ -1738,11 +1789,11 @@ class WC_Cart {
 			} else {
 				
 				$row_price = $price * $quantity;
-				$return = woocommerce_price( $row_price );
+				$product_subtotal = woocommerce_price( $row_price );
 			
 			}
 			
-			return $return; 
+			return apply_filters( 'woocommerce_cart_product_subtotal', $product_subtotal, $_product, $quantity, $this ); 
 			
 		}
 		
@@ -1783,9 +1834,11 @@ class WC_Cart {
 		 */
 		function get_discounts_before_tax() {
 			if ( $this->discount_cart ) {
-				return woocommerce_price( $this->discount_cart ); 
+				$discounts_before_tax = woocommerce_price( $this->discount_cart ); 
+			} else {
+				$discounts_before_tax = false;
 			}
-			return false;
+			return apply_filters( 'woocommerce_cart_discounts_before_tax', $discounts_before_tax, $this );
 		}
 		
 		/**
@@ -1795,9 +1848,11 @@ class WC_Cart {
 		 */
 		function get_discounts_after_tax() {
 			if ( $this->discount_total ) {
-				return woocommerce_price( $this->discount_total ); 
+				$discounts_after_tax = woocommerce_price( $this->discount_total ); 
+			} else {
+				$discounts_after_tax = false;
 			}
-			return false;
+			return apply_filters( 'woocommerce_cart_discounts_after_tax', $discounts_after_tax, $this );
 		}
 		
 		/**
@@ -1807,10 +1862,12 @@ class WC_Cart {
 		 */
 		function get_total_discount() {
 			if ( $this->discount_total || $this->discount_cart ) {
-				return woocommerce_price( $this->discount_total + $this->discount_cart ); 
+				$total_discount = woocommerce_price( $this->discount_total + $this->discount_cart );
+			} else {
+				$total_discount = false;
 			}
-			return false;
-		}	
+			return apply_filters( 'woocommerce_cart_total_discount', $total_discount, $this );
+		}
 }
 
 /**

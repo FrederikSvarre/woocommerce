@@ -52,7 +52,7 @@ function woocommerce_order_data_meta_box($post) {
 		
 			<div class="order_data_left">
 				
-				<h2><?php _e('Order Details', 'woocommerce'); ?> &mdash; #<?php echo $thepostid; ?></h2>
+				<h2><?php _e('Order Details', 'woocommerce'); ?> &mdash; <?php echo $order->get_order_number(); ?></h2>
 				
 				<p class="form-field"><label for="order_status"><?php _e('Order status:', 'woocommerce') ?></label>
 				<select id="order_status" name="order_status" class="chosen_select">
@@ -84,7 +84,9 @@ function woocommerce_order_data_meta_box($post) {
 				
 				<p class="form-field form-field-wide"><label for="excerpt"><?php _e('Customer Note:', 'woocommerce') ?></label>
 				<textarea rows="1" cols="40" name="excerpt" tabindex="6" id="excerpt" placeholder="<?php _e('Customer\'s notes about the order', 'woocommerce'); ?>"><?php echo $post->post_excerpt; ?></textarea></p>
-			
+
+				<?php do_action( 'woocommerce_admin_order_data_after_order_details', $order ); ?>
+
 			</div>
 			<div class="order_data_right">
 				<div class="order_data">
@@ -123,7 +125,7 @@ function woocommerce_order_data_meta_box($post) {
 								'label' => __('Country', 'woocommerce'), 
 								'show'	=> false,
 								'type'	=> 'select',
-								'options' => $woocommerce->countries->get_allowed_countries()
+								'options' => array( '' => __( 'Select a country&hellip;', 'woocommerce' ) ) + $woocommerce->countries->get_allowed_countries()
 								),
 							'state' => array( 
 								'label' => __('State/County', 'woocommerce'), 
@@ -165,6 +167,8 @@ function woocommerce_order_data_meta_box($post) {
 						endforeach;
 						
 						echo '</div>';
+
+						do_action( 'woocommerce_admin_order_data_after_billing_address', $order );
 					?>
 				</div>
 				<div class="order_data order_data_alt">
@@ -204,7 +208,7 @@ function woocommerce_order_data_meta_box($post) {
 								'label' => __('Country', 'woocommerce'), 
 								'show'	=> false,
 								'type'	=> 'select',
-								'options' => $woocommerce->countries->get_allowed_countries()
+								'options' => array( '' => __( 'Select a country&hellip;', 'woocommerce' ) ) + $woocommerce->countries->get_allowed_countries()
 								),
 							'state' => array( 
 								'label' => __('State/County', 'woocommerce'), 
@@ -241,7 +245,7 @@ function woocommerce_order_data_meta_box($post) {
 						
 						echo '</div>';
 						
-						do_action('woocommerce_admin_order_data_after_shipping_address');
+						do_action( 'woocommerce_admin_order_data_after_shipping_address', $order );
 					?>
 				</div>
 			</div>
@@ -483,10 +487,11 @@ function woocommerce_order_totals_meta_box($post) {
 				<label><?php _e('Method:', 'woocommerce'); ?></label>
 				<input type="text" name="_shipping_method" id="_shipping_method" value="<?php 
 				if (isset($data['_shipping_method'][0])) echo $data['_shipping_method'][0];
-				?>" placeholder="<?php _e('Shipping method...', 'woocommerce'); ?>" />
+				?>" placeholder="<?php _e('Shipping method&hellip;', 'woocommerce'); ?>" />
 			</li>
 	
 		</ul>
+		<?php do_action( 'woocommerce_admin_order_totals_after_shipping', $post->ID ) ?>
 		<div class="clear"></div>
 	</div>
 	<div class="totals_group">
@@ -563,7 +568,7 @@ function woocommerce_order_totals_meta_box($post) {
 				<label><?php _e('Payment Method:', 'woocommerce'); ?></label>
 				<input type="text" name="_payment_method" id="_payment_method" value="<?php 
 					if (isset($data['_payment_method'][0])) echo $data['_payment_method'][0];
-				?>" class="first" placeholder="<?php _e('Payment method...', 'woocommerce'); ?>" />
+				?>" class="first" placeholder="<?php _e('Payment method&hellip;', 'woocommerce'); ?>" />
 			</li>
 	
 		</ul>
@@ -580,9 +585,7 @@ function woocommerce_order_totals_meta_box($post) {
 add_action('woocommerce_process_shop_order_meta', 'woocommerce_process_shop_order_meta', 1, 2);
 
 function woocommerce_process_shop_order_meta( $post_id, $post ) {
-	global $wpdb, $woocommerce;
-	
-	$woocommerce_errors = array();
+	global $wpdb, $woocommerce, $woocommerce_errors;
 	
 	// Add key
 		add_post_meta( $post_id, '_order_key', uniqid('order_'), true );
@@ -776,8 +779,10 @@ function woocommerce_process_shop_order_meta( $post_id, $post ) {
 			
 			$order->add_order_note( __('Manual stock reduction complete.', 'woocommerce') );
 			
+			do_action( 'woocommerce_reduce_order_stock', $order );
+			
 		elseif (isset($_POST['restore_stock']) && $_POST['restore_stock'] && sizeof($order_items)>0) :
-		
+			
 			$order->add_order_note( __('Manually restoring stock.', 'woocommerce') );
 			
 			foreach ($order_items as $order_item) :
@@ -804,19 +809,20 @@ function woocommerce_process_shop_order_meta( $post_id, $post ) {
 			 	
 			endforeach;
 			
-			do_action( 'woocommerce_restore_order_stock', $order );
-			
 			$order->add_order_note( __('Manual stock restore complete.', 'woocommerce') );
+			
+			do_action( 'woocommerce_restore_order_stock', $order );
 		
 		elseif (isset($_POST['invoice']) && $_POST['invoice']) :
 			
-			// Mail link to customer
-			global $woocommerce;
+			do_action( 'woocommerce_before_send_customer_invoice', $order );
+			
 			$mailer = $woocommerce->mailer();
 			$mailer->customer_invoice( $order );
 			
+			do_action( 'woocommerce_after__customer_invoice', $order );
+			
 		endif;
 	
-	// Error Handling
-		if (sizeof($woocommerce_errors)>0) update_option('woocommerce_errors', $woocommerce_errors);
+	delete_transient( 'woocommerce_processing_order_count' );
 }

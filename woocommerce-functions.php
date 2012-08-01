@@ -88,60 +88,6 @@ function woocommerce_nav_menu_item_classes( $menu_items, $args ) {
 }
 
 /**
- * Detect frontpage shop and fix pagination on static front page
- **/
-function woocommerce_front_page_archive_paging_fix() {
-	
-	if ( is_front_page() && is_page( woocommerce_get_page_id('shop') )) :
-		
-		if (get_query_var('paged')) :
-			$paged = get_query_var('paged'); 
-		else :
-			$paged = (get_query_var('page')) ? get_query_var('page') : 1;
-		endif;
-		
-		global $wp_query;
-		
-		$wp_query->query( array( 'page_id' => woocommerce_get_page_id('shop'), 'is_paged' => true, 'paged' => $paged ) );
-		
-		define('SHOP_IS_ON_FRONT', true);
-		
-	endif;
-}
-
-/**
- * Front page archive/shop template applied to main loop
- */
-function woocommerce_front_page_archive( $query ) {
-		
-	global $paged, $woocommerce, $wp_query;
-		
-	// Only apply to front_page
-	if ( defined('SHOP_IS_ON_FRONT') && is_main_query() ) :
-		
-		if (get_query_var('paged')) :
-			$paged = get_query_var('paged'); 
-		else :
-			$paged = (get_query_var('page')) ? get_query_var('page') : 1;
-		endif;
-		
-		// Filter the query
-		add_filter( 'pre_get_posts', array( &$woocommerce->query, 'pre_get_posts') );
-		
-		// Query the products
-		$wp_query->query( array( 'page_id' => '', 'p' => '', 'post_type' => 'product', 'paged' => $paged ) );
-		
-		// get products in view (for use by widgets)
-		$woocommerce->query->get_products_in_view();
-		
-		// Remove the query manipulation
-		remove_filter( 'pre_get_posts', array( &$woocommerce->query, 'pre_get_posts') ); 
-		remove_action( 'loop_start', 'woocommerce_front_page_archive', 1);
-	
-	endif;
-}
-
-/**
  * Fix active class in wp_list_pages for shop page
  *
  * Suggested by jessor - https://github.com/woothemes/woocommerce/issues/177
@@ -168,7 +114,7 @@ function woocommerce_list_pages($pages){
  **/
 function woocommerce_nav_menu_items( $items, $args ) {
 	if ( get_option('woocommerce_menu_logout_link')=='yes' && strstr($items, get_permalink(woocommerce_get_page_id('myaccount'))) && is_user_logged_in() ) :
-		$items .= '<li><a href="'. wp_logout_url(home_url()) .'">'.__('Logout', 'woocommerce').'</a></li>';
+		$items .= '<li class="logout"><a href="'. wp_logout_url(home_url()) .'">'.__('Logout', 'woocommerce').'</a></li>';
 	endif;
 	
     return $items;
@@ -179,17 +125,6 @@ function woocommerce_nav_menu_items( $items, $args ) {
  */
 function woocommerce_update_catalog_ordering() {
 	if (isset($_REQUEST['sort']) && $_REQUEST['sort'] != '') $_SESSION['orderby'] = esc_attr($_REQUEST['sort']);
-}
-
-/**
- * Increase coupon usage count
- */
-function woocommerce_increase_coupon_counts() {
-	global $woocommerce;
-	if ($applied_coupons = $woocommerce->cart->get_applied_coupons()) foreach ($applied_coupons as $code) :
-		$coupon = new WC_Coupon( $code );
-		$coupon->inc_usage_count();
-	endforeach;
 }
 
 /**
@@ -212,7 +147,7 @@ function woocommerce_update_cart_action() {
 	// Update Cart
 	elseif (isset($_POST['update_cart']) && $_POST['update_cart']  && $woocommerce->verify_nonce('cart')) :
 		
-		$cart_totals = $_POST['cart'];
+		$cart_totals = isset( $_POST['cart'] ) ? $_POST['cart'] : '';
 		
 		if (sizeof($woocommerce->cart->get_cart())>0) : 
 			foreach ($woocommerce->cart->get_cart() as $cart_item_key => $values) :
@@ -247,6 +182,7 @@ function woocommerce_update_cart_action() {
 		$woocommerce->add_message( __('Cart updated.', 'woocommerce') );
 		
 		$referer = ( wp_get_referer() ) ? wp_get_referer() : $woocommerce->cart->get_cart_url();
+		$referer = remove_query_arg( 'remove_discounts', $referer );
 		wp_safe_redirect( $referer );
 		exit;
 
@@ -261,7 +197,7 @@ function woocommerce_update_cart_action() {
 function woocommerce_add_to_cart_action( $url = false ) {
 	global $woocommerce;
 
-	if (empty($_REQUEST['add-to-cart']) || !$woocommerce->verify_nonce('add_to_cart', '_REQUEST')) return;
+	if ( empty( $_REQUEST['add-to-cart'] ) ) return;
     
     $added_to_cart 		= false;
     
@@ -387,7 +323,7 @@ function woocommerce_add_to_cart_action( $url = false ) {
     // If we added the product to the cart we can now do a redirect, otherwise just continue loading the page to show errors
     if ($added_to_cart) {
     
-		$url = apply_filters('add_to_cart_redirect', $url);
+		$url = apply_filters( 'add_to_cart_redirect', $url );
 		
 		// If has custom URL redirect there
 		if ( $url ) {
@@ -517,7 +453,7 @@ function woocommerce_pay_action() {
 				// Update meta
 				update_post_meta( $order_id, '_payment_method', $payment_method);
 				if (isset($available_gateways) && isset($available_gateways[$payment_method])) :
-					$payment_method_title = $available_gateways[$payment_method]->title;
+					$payment_method_title = $available_gateways[$payment_method]->get_title();
 				endif;
 				update_post_meta( $order_id, '_payment_method_title', $payment_method_title);
 	
@@ -588,28 +524,6 @@ function woocommerce_process_login() {
 }
 
 /**
- * Process the coupon form on the checkout and cart
- **/
-function woocommerce_process_coupon_form() {
-	global $woocommerce;
-
-	// Do nothing if coupons are globally disabled
-	if ( get_option( 'woocommerce_enable_coupons' ) == 'no' ) return;
-
-	if (isset($_POST['coupon_code']) && $_POST['coupon_code']) :
-	
-		$coupon_code = stripslashes(trim($_POST['coupon_code']));
-		$woocommerce->cart->add_discount($coupon_code);
-		
-		if ( wp_get_referer() ) :
-			wp_safe_redirect( remove_query_arg('remove_discounts', wp_get_referer()) );
-			exit;
-		endif;
-	
-	endif;	
-}
-
-/**
  * Process the registration form
  **/
 function woocommerce_process_registration() {
@@ -669,7 +583,7 @@ function woocommerce_process_registration() {
                 $user_id 	= wp_create_user( $sanitized_user_login, $password, $user_email );
                 
                 if ( !$user_id ) {
-                	$woocommerce->add_error( '<strong>' . __('ERROR', 'woocommerce') . '</strong>: ' . __('Couldn&#8217;t register you... please contact us if you continue to have problems.', 'woocommerce') );
+                	$woocommerce->add_error( '<strong>' . __('ERROR', 'woocommerce') . '</strong>: ' . __('Couldn&#8217;t register you&hellip; please contact us if you continue to have problems.', 'woocommerce') );
                     return;
                 }
 
@@ -714,6 +628,9 @@ function woocommerce_order_again() {
 	// Nonce security check
 	if ( ! $woocommerce->verify_nonce( 'order_again', '_GET' ) ) return;
 
+	// Clear current cart
+	$woocommerce->cart->empty_cart();
+	
 	// Load the previous order - Stop if the order does not exist
 	$order = new WC_Order( (int) $_GET['order_again'] );
 	
@@ -797,7 +714,7 @@ function woocommerce_download_product() {
 		
 		$download_file = (int) urldecode($_GET['download_file']);
 		$order_key = urldecode( $_GET['order'] );
-		$email = urldecode( $_GET['email'] );
+		$email = str_replace( ' ', '+', urldecode( $_GET['email'] ) );
 		
 		if (!is_email($email)) :
 			wp_die( __('Invalid email address.', 'woocommerce') . ' <a href="'.home_url().'">' . __('Go to homepage &rarr;', 'woocommerce') . '</a>' );
@@ -1034,136 +951,6 @@ function woocommerce_download_product() {
 }
 
 /**
- * Google Analytics standard tracking
- **/
-function woocommerce_google_tracking() {
-	global $woocommerce;
-	
-	if ( is_admin() || current_user_can('manage_options') || get_option('woocommerce_ga_standard_tracking_enabled') == "no" ) return;
-	
-	$tracking_id = get_option('woocommerce_ga_id');
-	
-	if ( ! $tracking_id ) return;
-	
-	$loggedin 	= ( is_user_logged_in() ) ? 'yes' : 'no';
-	if ( is_user_logged_in() ) {
-		$user_id 		= get_current_user_id();
-		$current_user 	= get_user_by('id', $user_id);
-		$username 		= $current_user->user_login;
-	} else {
-		$user_id 		= '';
-		$username 		= __('Guest', 'woocommerce');
-	}
-	?>
-	<script type="text/javascript">
-	
-		var _gaq = _gaq || [];
-		_gaq.push(
-			['_setAccount', '<?php echo $tracking_id; ?>'],
-			['_setCustomVar', 1, 'logged-in', '<?php echo $loggedin; ?>', 1],
-			['_setCustomVar', 2, 'user-id', '<?php echo $user_id; ?>', 1],
-			['_setCustomVar', 3, 'username', '<?php echo $username; ?>', 1],
-			['_trackPageview']
-		);
-		
-		(function() {
-			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
-			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
-			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
-		})();
-
-	</script>
-	<?php
-}
-			
-/**
- * Google Analytics eCommerce tracking
- **/
-function woocommerce_ecommerce_tracking( $order_id ) {
-	global $woocommerce;
-	
-	if ( is_admin() || current_user_can('manage_options') || get_option('woocommerce_ga_ecommerce_tracking_enabled') == "no" ) return;
-	
-	$tracking_id = get_option('woocommerce_ga_id');
-	
-	if ( ! $tracking_id ) return;
-	
-	// Doing eCommerce tracking so unhook standard tracking from the footer
-	remove_action('wp_footer', 'woocommerce_google_tracking');
-	
-	// Get the order and output tracking code
-	$order = new WC_Order($order_id);
-	
-	$loggedin 	= (is_user_logged_in()) ? 'yes' : 'no';
-	if (is_user_logged_in()) {
-		$user_id 		= get_current_user_id();
-		$current_user 	= get_user_by('id', $user_id);
-		$username 		= $current_user->user_login;
-	} else {
-		$user_id 		= '';
-		$username 		= __('Guest', 'woocommerce');
-	}
-	?>
-	<script type="text/javascript">
-		var _gaq = _gaq || [];
-		
-		_gaq.push(
-			['_setAccount', '<?php echo $tracking_id; ?>'],
-			['_setCustomVar', 1, 'logged-in', '<?php echo $loggedin; ?>', 1],
-			['_setCustomVar', 2, 'user-id', '<?php echo $user_id; ?>', 1],
-			['_setCustomVar', 3, 'username', '<?php echo $username; ?>', 1],
-			['_trackPageview']
-		);
-		
-		_gaq.push(['_addTrans',
-			'<?php echo $order_id; ?>',           		// order ID - required
-			'<?php bloginfo('name'); ?>',  				// affiliation or store name
-			'<?php echo $order->order_total; ?>',   	// total - required
-			'<?php echo $order->get_total_tax(); ?>',   // tax
-			'<?php echo $order->get_shipping(); ?>',	// shipping
-			'<?php echo $order->billing_city; ?>',      // city
-			'<?php echo $order->billing_state; ?>',     // state or province
-			'<?php echo $order->billing_country; ?>'    // country
-		]);
-		
-		// Order items
-		<?php if ($order->get_items()) foreach($order->get_items() as $item) : $_product = $order->get_product_from_item( $item ); ?>
-			_gaq.push(['_addItem',
-				'<?php echo $order_id; ?>',           	// order ID - required
-				'<?php if (!empty($_product->sku)) 
-							echo __('SKU:', 'woocommerce') . ' ' . $_product->sku; 
-					   else 
-					   		echo $_product->id;
-				?>', // SKU/code - required
-				'<?php echo $item['name']; ?>',        	// product name
-				'<?php if (isset($_product->variation_data)){
-                            echo woocommerce_get_formatted_variation( $_product->variation_data, true ); 
-                       } else {
-                            $out = array();
-                            $categories = get_the_terms($_product->id, 'product_cat');
-                            foreach ( $categories as $category ){
-                                $out[] = $category->name;
-                            }
-                            echo join( "/", $out);
-                       }
-                 ?>',   // category or variation
-				'<?php echo ($item['line_total']/$item['qty']); ?>',         // unit price - required
-				'<?php echo $item['qty']; ?>'           // quantity - required
-			]);
-		<?php endforeach; ?>
-		
-		_gaq.push(['_trackTrans']); 					// submits transaction to the Analytics servers
-		
-		(function() {
-			var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
-			ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
-			var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
-		})();
-	</script>
-	<?php
-} 
-
-/**
  * ecommerce tracking with piwik
  */
 function woocommerce_ecommerce_tracking_piwik( $order_id ) {
@@ -1174,7 +961,9 @@ function woocommerce_ecommerce_tracking_piwik( $order_id ) {
 	// Call the Piwik ecommerce function if WP-Piwik is configured to add tracking codes to the page
 	$wp_piwik_global_settings = get_option('wp-piwik_global-settings');
 	
-	if (!isset($wp_piwik_global_settings['add_tracking_code']) || !$wp_piwik_global_settings['add_tracking_code']) return;
+	// Return if Piwik settings are not here, or if global is not set
+	if ( ! isset( $wp_piwik_global_settings['add_tracking_code'] ) || ! $wp_piwik_global_settings['add_tracking_code'] ) return;
+	if ( ! isset( $GLOBALS['wp_piwik'] ) ) return;
 	
 	// Remove WP-Piwik from wp_footer and run it here instead, to get Piwik 
 	// loaded *before* we do our ecommerce tracking calls

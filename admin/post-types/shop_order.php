@@ -36,7 +36,7 @@ function woocommerce_edit_order_columns($columns){
 	$columns["billing_address"] = __("Billing", 'woocommerce');
 	$columns["shipping_address"] = __("Shipping", 'woocommerce');
 	$columns["total_cost"] = __("Order Total", 'woocommerce');
-	$columns["order_comments"] = '<img alt="' . esc_attr__( 'Order Notes', 'woocommerce' ) . '" src="' . esc_url( admin_url( 'images/comment-grey-bubble.png' ) ) . '" />';
+	$columns["order_comments"] = '<img alt="' . esc_attr__( 'Order Notes', 'woocommerce' ) . '" src="' . esc_url( admin_url( 'images/comment-grey-bubble.png' ) ) . '" class="tips" data-tip="' . __("Order Notes", 'woocommerce') . '" />';
 	$columns["note"] = '<img src="' . $woocommerce->plugin_url() . '/assets/images/note_head.png" alt="' . __("Customer Notes", 'woocommerce') . '" class="tips" data-tip="' . __("Customer Notes", 'woocommerce') . '" />';
 	$columns["order_date"] = __("Date", 'woocommerce');
 	$columns["order_actions"] = __("Actions", 'woocommerce');
@@ -77,7 +77,7 @@ function woocommerce_custom_order_columns($column) {
            		$user = __('Guest', 'woocommerce');
            	endif;
            	
-           	echo '<a href="'.admin_url('post.php?post='.$post->ID.'&action=edit').'"><strong>'.sprintf( __('Order #%s', 'woocommerce'), $post->ID ).'</strong></a> ' . __('made by', 'woocommerce') . ' ' . $user;
+           	echo '<a href="'.admin_url('post.php?post='.$post->ID.'&action=edit').'"><strong>'.sprintf( __('Order %s', 'woocommerce'), $order->get_order_number() ).'</strong></a> ' . __('made by', 'woocommerce') . ' ' . $user;
            	
            	if ($order->billing_email) :
         		echo '<small class="meta">'.__('Email:', 'woocommerce') . ' ' . '<a href="' . esc_url( 'mailto:'.$order->billing_email ).'">'.esc_html( $order->billing_email ).'</a></small>';
@@ -113,7 +113,7 @@ function woocommerce_custom_order_columns($column) {
         	endif;
 		break;
 		case "total_cost" :
-			echo woocommerce_price($order->order_total);
+			echo $order->get_formatted_order_total();
 		break;
 		case "order_date" :
 		
@@ -330,7 +330,7 @@ function woocommerce_shop_order_search_custom_fields( $wp ) {
 	if( !isset( $wp->query_vars['s'] ) || !$wp->query_vars['s'] ) return $wp;
 	if ($wp->query_vars['post_type']!='shop_order') return $wp;
 	
-	$search_fields = array(
+	$search_fields = apply_filters( 'woocommerce_shop_order_search_fields', array(
 		'_order_key',
 		'_billing_first_name',
 		'_billing_last_name',
@@ -344,7 +344,7 @@ function woocommerce_shop_order_search_custom_fields( $wp ) {
 		'_billing_email',
 		'_order_items',
 		'_billing_phone'
-	);
+	) );
 	
 	// Query matching custom fields - this seems faster than meta_query
 	$post_ids = $wpdb->get_col($wpdb->prepare('SELECT post_id FROM '.$wpdb->postmeta.' WHERE meta_key IN ('.'"'.implode('","', $search_fields).'"'.') AND meta_value LIKE "%%%s%%"', esc_attr($_GET['s']) ));

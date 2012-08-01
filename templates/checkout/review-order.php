@@ -49,7 +49,7 @@ $available_methods = $woocommerce->shipping->get_available_shipping_methods();
 							$method->full_label = esc_html( $method->label );
 
 							if ( $method->cost > 0 ) {
-								$method->full_label .= ' &mdash; ';
+								$method->full_label .= ': ';
 
 								// Append price to label using the correct tax settings
 								if ( $woocommerce->cart->display_totals_ex_tax || ! $woocommerce->cart->prices_include_tax ) {
@@ -72,17 +72,30 @@ $available_methods = $woocommerce->shipping->get_available_shipping_methods();
 							echo $method->full_label;
 							echo '<input type="hidden" name="shipping_method" id="shipping_method" value="'.esc_attr( $method->id ).'">';
 
-						// Show multiple shipping methods in a select list
+						// Show multiple shipping methods
 						} else {
 
-							echo '<select name="shipping_method" id="shipping_method">';
-							foreach ( $available_methods as $method ) {
-								echo '<option value="'.esc_attr( $method->id ).'" '.selected( $method->id, $_SESSION['_chosen_shipping_method'], false).'>';
-								echo strip_tags( $method->full_label );
-								echo '</option>';
-							}
-							echo '</select>';
+							if ( get_option('woocommerce_shipping_method_format') == 'select' ) {
 
+								echo '<select name="shipping_method" id="shipping_method">';
+								
+								foreach ( $available_methods as $method ) 
+									echo '<option value="' . esc_attr( $method->id ) . '" ' . selected( $method->id, $_SESSION['_chosen_shipping_method'], false ) . '>' . strip_tags( $method->full_label ) . '</option>';
+
+								echo '</select>';
+							
+							} else {
+							
+							
+								echo '<ul id="shipping_method">';
+								
+								foreach ( $available_methods as $method )
+									echo '<li><input type="radio" name="shipping_method" id="shipping_method_' . sanitize_title( $method->id ) . '" value="' . esc_attr( $method->id ) . '" ' . checked( $method->id, $_SESSION['_chosen_shipping_method'], false) . ' /> <label for="shipping_method_' . sanitize_title( $method->id ) . '">' . $method->full_label . '</label></li>';
+								
+								echo '</ul>';
+							
+							}
+							
 						}
 
 					// No shipping methods are available
@@ -106,7 +119,7 @@ $available_methods = $woocommerce->shipping->get_available_shipping_methods();
 			<?php 
 				if ($woocommerce->cart->get_cart_tax()) :
 					
-					$taxes = $woocommerce->cart->get_taxes();
+					$taxes = $woocommerce->cart->get_formatted_taxes();
 					
 					if (sizeof($taxes)>0) :
 					
@@ -116,8 +129,12 @@ $available_methods = $woocommerce->shipping->get_available_shipping_methods();
 
 							?>
 							<tr class="tax-rate tax-rate-<?php echo $key; ?>">
-								<th colspan="2"><?php if (get_option('woocommerce_prices_include_tax')=='yes') : _e('incl.', 'woocommerce'); endif; ?> <?php echo $woocommerce->cart->tax->get_rate_label( $key ); ?></th>
-								<td><?php echo woocommerce_price($tax); ?></td>
+								<th colspan="2"><?php 
+									if ( get_option('woocommerce_prices_include_tax') == 'yes' ) 
+										_e('incl.&nbsp;', 'woocommerce'); 
+									echo $woocommerce->cart->tax->get_rate_label( $key ); 
+								?></th>
+								<td><?php echo $tax; ?></td>
 							</tr>
 							<?php
 							
@@ -136,8 +153,12 @@ $available_methods = $woocommerce->shipping->get_available_shipping_methods();
 
 							?>
 							<tr class="tax-rate tax-rate-<?php echo $key; ?>">
-								<th colspan="2"><?php if (get_option('woocommerce_prices_include_tax')=='yes') : _e('incl.', 'woocommerce'); endif; ?> <?php echo $woocommerce->cart->tax->get_rate_label( $key ); ?></th>
-								<td><?php echo woocommerce_price($tax); ?></td>
+								<th colspan="2"><?php 
+									if ( get_option('woocommerce_prices_include_tax') == 'yes' ) 
+										_e('incl.&nbsp;', 'woocommerce'); 
+									echo $woocommerce->cart->tax->get_rate_label( $key ); 
+								?></th>
+								<td><?php echo $tax; ?></td>
 							</tr>
 							<?php
 							
@@ -191,10 +212,10 @@ $available_methods = $woocommerce->shipping->get_available_shipping_methods();
 						$_product = $values['data'];
 						if ($_product->exists() && $values['quantity']>0) :
 							echo '
-								<tr>
+								<tr class = "' . esc_attr( apply_filters('woocommerce_checkout_table_item_class', 'checkout_table_item', $values, $item_id ) ) . '">
 									<td class="product-name">'.$_product->get_title().$woocommerce->cart->get_item_data( $values ).'</td>
 									<td class="product-quantity">'.$values['quantity'].'</td>
-									<td class="product-total">' . $woocommerce->cart->get_product_subtotal( $_product, $values['quantity'] ) . '</td>
+									<td class="product-total">' . apply_filters( 'woocommerce_checkout_item_subtotal', $woocommerce->cart->get_product_subtotal( $_product, $values['quantity'] ), $values, $item_id ) . '</td>
 								</tr>';
 						endif;
 					endforeach; 
@@ -226,9 +247,9 @@ $available_methods = $woocommerce->shipping->get_available_shipping_methods();
 						?>
 						<li>
 						<input type="radio" id="payment_method_<?php echo $gateway->id; ?>" class="input-radio" name="payment_method" value="<?php echo esc_attr( $gateway->id ); ?>" <?php if ($gateway->chosen) echo 'checked="checked"'; ?> />
-						<label for="payment_method_<?php echo $gateway->id; ?>"><?php echo $gateway->title; ?> <?php echo apply_filters('woocommerce_gateway_icon', $gateway->icon(), $gateway->id); ?></label> 
+						<label for="payment_method_<?php echo $gateway->id; ?>"><?php echo $gateway->get_title(); ?> <?php echo $gateway->get_icon(); ?></label> 
 							<?php
-								if ($gateway->has_fields || $gateway->description) : 
+								if ( $gateway->has_fields() || $gateway->get_description() ) : 
 									echo '<div class="payment_box payment_method_'.$gateway->id.'" style="display:none;">';
 									$gateway->payment_fields();
 									echo '</div>';
@@ -250,9 +271,9 @@ $available_methods = $woocommerce->shipping->get_available_shipping_methods();
 		</ul>
 		<?php endif; ?>
 
-		<div class="form-row">
+		<div class="form-row place-order">
 		
-			<noscript><?php _e('Since your browser does not support JavaScript, or it is disabled, please ensure you click the <em>Update Totals</em> button before placing your order. You may be charged more than the amount stated above if you fail to do so.', 'woocommerce'); ?><br/><input type="submit" class="button-alt" name="woocommerce_checkout_update_totals" value="<?php _e('Update totals', 'woocommerce'); ?>" /></noscript>
+			<noscript><?php _e('Since your browser does not support JavaScript, or it is disabled, please ensure you click the <em>Update Totals</em> button before placing your order. You may be charged more than the amount stated above if you fail to do so.', 'woocommerce'); ?><br/><input type="submit" class="button alt" name="woocommerce_checkout_update_totals" value="<?php _e('Update totals', 'woocommerce'); ?>" /></noscript>
 		
 			<?php $woocommerce->nonce_field('process_checkout')?>
 			

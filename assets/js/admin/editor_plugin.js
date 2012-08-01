@@ -1,8 +1,6 @@
 (
 	function(){
 	
-		var icon_url = '../wp-content/plugins/woocommerce/assets/images/icons/wc_icon.png';
-	
 		tinymce.create(
 			"tinymce.plugins.WooCommerceShortcodes",
 			{
@@ -13,8 +11,7 @@
 					if(d=="woocommerce_shortcodes_button"){
 					
 						d=e.createMenuButton( "woocommerce_shortcodes_button",{
-							title:"Insert WooCommerce Shortcode",
-							image:icon_url,
+							title:"Insert Shortcode",
 							icons:false
 							});
 							
@@ -38,7 +35,7 @@
 								
 								b.addSeparator();
 								
-								c=b.addMenu({title:"WooCommerce Pages"});
+								c=b.addMenu({title:"Pages"});
 										a.addImmediate(c,"Cart","[woocommerce_cart]" );
 										a.addImmediate(c,"Checkout","[woocommerce_checkout]" );
 										a.addImmediate(c,"Order tracking","[woocommerce_order_tracking]" );

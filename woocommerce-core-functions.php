@@ -20,6 +20,7 @@
  * @param mixed $dim
  * @param mixed $unit 'in', 'm', 'cm', 'm'
  * @return void
+ *                                                                      
  */
 function woocommerce_get_dimension( $dim, $to_unit ) {
 	
@@ -88,7 +89,10 @@ function woocommerce_get_weight( $weight, $to_unit ) {
 				$weight *= 0.001;
 			break;
 			case 'lbs':
-				$weight *= 0.4535;
+				$weight *= 0.4536;
+			break;
+			case 'oz':
+				$weight *= 0.0283;
 			break;
 		}
 
@@ -98,7 +102,10 @@ function woocommerce_get_weight( $weight, $to_unit ) {
 				$weight *= 1000;
 			break;
 			case 'lbs':
-				$weight *= 2.204;
+				$weight *= 2.2046;
+			break;
+			case 'oz':
+				$weight *= 35.274;
 			break;
 		}
 	}
@@ -133,7 +140,7 @@ function woocommerce_mail( $to, $subject, $message, $headers = "Content-Type: te
  *
  * returns -1 if no page is found
  **/
-if (!function_exists('woocommerce_get_page_id')) {
+if ( ! function_exists( 'woocommerce_get_page_id' ) ) {
 	function woocommerce_get_page_id( $page ) {
 		$page = apply_filters('woocommerce_get_' . $page . '_page_id', get_option('woocommerce_' . $page . '_page_id'));
 		return ($page) ? $page : -1;
@@ -145,7 +152,7 @@ if (!function_exists('woocommerce_get_page_id')) {
  *
  * Clears the cart session when called
  **/
-if (!function_exists('woocommerce_empty_cart')) {
+if ( ! function_exists( 'woocommerce_empty_cart' ) ) {
 	function woocommerce_empty_cart() {
 		global $woocommerce;
 		
@@ -159,7 +166,7 @@ if (!function_exists('woocommerce_empty_cart')) {
  * WooCommerce disable admin bar
  *
  **/
-if (!function_exists('woocommerce_disable_admin_bar')) {
+if ( ! function_exists( 'woocommerce_disable_admin_bar' ) ) {
 	function woocommerce_disable_admin_bar() {
 		if ( get_option('woocommerce_lock_down_admin')=='yes' && !current_user_can('edit_posts') ) {
 			add_filter( 'show_admin_bar', '__return_false' );
@@ -194,42 +201,42 @@ function woocommerce_load_persistent_cart( $user_login, $user ) {
 function is_woocommerce() {
 	if (is_shop() || is_product_category() || is_product_tag() || is_product()) return true; else return false;
 }
-if (!function_exists('is_shop')) {
+if ( ! function_exists( 'is_shop' ) ) {
 	function is_shop() {
 		if (is_post_type_archive( 'product' ) || is_page(woocommerce_get_page_id('shop'))) return true; else return false;
 	}
 }
-if (!function_exists('is_product_category')) {
+if ( ! function_exists( 'is_product_category' ) ) {
 	function is_product_category( $term = '' ) {
 		return is_tax( 'product_cat', $term );
 	}
 }
-if (!function_exists('is_product_tag')) {
+if ( ! function_exists( 'is_product_tag' ) ) {
 	function is_product_tag( $term = '' ) {
 		return is_tax( 'product_tag', $term );
 	}
 }
-if (!function_exists('is_product')) {
+if ( ! function_exists( 'is_product' ) ) {
 	function is_product() {
 		return is_singular( array('product') );
 	}
 }
-if (!function_exists('is_cart')) {
+if ( ! function_exists( 'is_cart' ) ) {
 	function is_cart() {
 		return is_page(woocommerce_get_page_id('cart'));
 	}
 }
-if (!function_exists('is_checkout')) {
+if ( ! function_exists( 'is_checkout' ) ) {
 	function is_checkout() {
 		if (is_page(woocommerce_get_page_id('checkout')) || is_page(woocommerce_get_page_id('pay'))) return true; else return false;
 	}
 }
-if (!function_exists('is_account_page')) {
+if ( ! function_exists( 'is_account_page' ) ) {
 	function is_account_page() {
 		if ( is_page(woocommerce_get_page_id('myaccount')) || is_page(woocommerce_get_page_id('edit_address')) || is_page(woocommerce_get_page_id('view_order')) || is_page(woocommerce_get_page_id('change_password')) ) return true; else return false;
 	}
 }
-if (!function_exists('is_ajax')) {
+if ( ! function_exists( 'is_ajax' ) ) {
 	function is_ajax() {
 		if ( defined('DOING_AJAX') ) return true;
 		if ( isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest' ) return true; else return false;
@@ -262,13 +269,13 @@ function woocommerce_get_template_part( $slug, $name = '' ) {
 /**
  * Get other templates (e.g. product attributes) passing attributes and including the file
  */
-function woocommerce_get_template( $template_name, $args = array(), $template_path = '' ) {
+function woocommerce_get_template( $template_name, $args = array(), $template_path = '', $default_path = '' ) {
 	global $woocommerce;
 	
 	if ( $args && is_array($args) ) 
 		extract( $args );
 	
-	$located = woocommerce_locate_template( $template_name, $template_path );
+	$located = woocommerce_locate_template( $template_name, $template_path, $default_path );
 	
 	do_action( 'woocommerce_before_template_part', $template_name, $template_path, $located );
 	
@@ -278,19 +285,33 @@ function woocommerce_get_template( $template_name, $args = array(), $template_pa
 }
 
 /**
- * Locate a template and return the path for inclusion
+ * Locate a template and return the path for inclusion.
+ *
+ * This is the load order:
+ *
+ *		yourtheme		/	$template_path	/	$template_name
+ *		yourtheme		/	$template_name
+ *		$default_path	/	$template_name
  */
-function woocommerce_locate_template( $template_name, $template_path = '' ) {
+function woocommerce_locate_template( $template_name, $template_path = '', $default_path = '' ) {
 	global $woocommerce;
 	
-    $template = ( ! empty( $template_path ) ) ? locate_template( array( $template_path . $template_name , $template_name ) ) : '';
-        
-	// Look in yourtheme/woocommerce/template-name and yourtheme/template-name
-	if ( ! $template ) $template = locate_template( array( $woocommerce->template_url . $template_name , $template_name ) );
+	if ( ! $template_path ) $template_path = $woocommerce->template_url;
+	if ( ! $default_path ) $default_path = $woocommerce->plugin_path() . '/templates/';
 	
-	// Get default template
-	if ( ! $template ) $template = $woocommerce->plugin_path() . '/templates/' . $template_name;
+	// Look within passed path within the theme - this is priority
+	$template = locate_template( 
+		array( 
+			$template_path . $template_name,
+			$template_name
+		) 
+	);
 
+	// Get default template
+	if ( ! $template )
+		$template = $default_path . $template_name;
+
+	// Return what we found
 	return apply_filters('woocommerce_locate_template', $template, $template_name, $template_path);
 }
 
@@ -308,32 +329,32 @@ function get_woocommerce_currency_symbol( $currency = '' ) {
 	if ( ! $currency ) $currency = get_woocommerce_currency();
 	$currency_symbol = '';
 	switch ($currency) :
-		case 'BRL' : $currency_symbol = 'R&#36;'; break; // in Brazil the correct is R$ 0.00,00
-		case 'AUD' :
-		case 'CAD' :
-		case 'MXN' :
-		case 'NZD' :
-		case 'HKD' :
-		case 'SGD' :
+		case 'BRL' : $currency_symbol = '&#82;&#36;'; break;
+		case 'AUD' : $currency_symbol = '&#36;'; break;
+		case 'CAD' : $currency_symbol = '&#36;'; break;
+		case 'MXN' : $currency_symbol = '&#36;'; break;
+		case 'NZD' : $currency_symbol = '&#36;'; break;
+		case 'HKD' : $currency_symbol = '&#36;'; break;
+		case 'SGD' : $currency_symbol = '&#36;'; break;
 		case 'USD' : $currency_symbol = '&#36;'; break;
 		case 'EUR' : $currency_symbol = '&euro;'; break;
-		case 'RMB' :
+		case 'CNY' : $currency_symbol = '&yen;'; break;
 		case 'JPY' : $currency_symbol = '&yen;'; break;
-		case 'TRY' : $currency_symbol = 'TL'; break;
-		case 'NOK' : $currency_symbol = 'kr'; break;
-		case 'ZAR' : $currency_symbol = 'R'; break;
+		case 'TRY' : $currency_symbol = '&#84;&#76;'; break;
+		case 'NOK' : $currency_symbol = '&#107;&#114;'; break;
+		case 'ZAR' : $currency_symbol = '&#82;'; break;
 		case 'CZK' : $currency_symbol = '&#75;&#269;'; break;
-		case 'MYR' : $currency_symbol = 'RM'; break;
-		case 'DKK' :
-		case 'HUF' :
-		case 'ILS' :
-		case 'PHP' :
-		case 'PLN' :
-		case 'SEK' :
-		case 'CHF' :
-		case 'TWD' :
-		case 'THB' : $currency_symbol = $currency; break;
-		case 'GBP' : 
+		case 'MYR' : $currency_symbol = '&#82;&#77;'; break;
+		case 'DKK' : $currency_symbol = '&#107;&#114;'; break;
+		case 'HUF' : $currency_symbol = '&#70;&#116;'; break;
+		case 'ILS' : $currency_symbol = '&#8362;'; break;
+		case 'PHP' : $currency_symbol = '&#8369;'; break;
+		case 'PLN' : $currency_symbol = '&#122;&#322;'; break;
+		case 'SEK' : $currency_symbol = '&#107;&#114;'; break;
+		case 'CHF' : $currency_symbol = '&#67;&#72;&#70;'; break;
+		case 'TWD' : $currency_symbol = '&#78;&#84;&#36;'; break;
+		case 'THB' : $currency_symbol = '&#3647;'; break;
+		case 'GBP' : $currency_symbol = '&pound;'; break;
 		default    : $currency_symbol = '&pound;'; break;
 	endswitch;
 	return apply_filters( 'woocommerce_currency_symbol', $currency_symbol, $currency );
@@ -382,10 +403,17 @@ function woocommerce_price( $price, $args = array() ) {
 }	
 	
 /**
- * Trim trailing zeros
+ * Trim trailing zeros off prices
  **/
 function woocommerce_trim_zeros( $price ) {
 	return preg_replace('/'.preg_quote(get_option('woocommerce_price_decimal_sep'), '/').'0++$/', '', $price);
+}
+
+/**
+ * Formal decimal numbers - format to 4 dp and remove trailing zeros
+ **/
+function woocommerce_format_decimal( $number ) {
+	return rtrim( rtrim( number_format( $number, 4, '.', '' ), '0' ), '.' );
 }
 
 /**
@@ -477,16 +505,24 @@ function woocommerce_get_formatted_variation( $variation = '', $flat = false ) {
 /**
  * Hex darker/lighter/contrast functions for colours
  **/
-if (!function_exists('woocommerce_hex_darker')) {
+if ( ! function_exists( 'woocommerce_rgb_from_hex' ) ) {
+	function woocommerce_rgb_from_hex( $color ) {
+		$color = str_replace( '#', '', $color );
+		// Convert shorthand colors to full format, e.g. "FFF" -> "FFFFFF"
+		$color = preg_replace( '~^(.)(.)(.)$~', '$1$1$2$2$3$3', $color );
+	
+		$rgb['R'] = hexdec( $color{0}.$color{1} );
+		$rgb['G'] = hexdec( $color{2}.$color{3} );
+		$rgb['B'] = hexdec( $color{4}.$color{5} );
+		return $rgb;
+	}
+}
+
+if ( ! function_exists( 'woocommerce_hex_darker' ) ) {
 	function woocommerce_hex_darker( $color, $factor = 30 ) {
-		$color = str_replace('#', '', $color);
-		
-		$base['R'] = hexdec($color{0}.$color{1});
-		$base['G'] = hexdec($color{2}.$color{3});
-		$base['B'] = hexdec($color{4}.$color{5});
-		
+		$base = woocommerce_rgb_from_hex( $color );
 		$color = '#';
-		
+
 		foreach ($base as $k => $v) :
 	        $amount = $v / 100;
 	        $amount = round($amount * $factor);
@@ -502,16 +538,11 @@ if (!function_exists('woocommerce_hex_darker')) {
 		return $color;        
 	}
 }
-if (!function_exists('woocommerce_hex_lighter')) {
+if ( ! function_exists( 'woocommerce_hex_lighter' ) ) {
 	function woocommerce_hex_lighter( $color, $factor = 30 ) {
-		$color = str_replace('#', '', $color);
-		
-		$base['R'] = hexdec($color{0}.$color{1});
-		$base['G'] = hexdec($color{2}.$color{3});
-		$base['B'] = hexdec($color{4}.$color{5});
-		
+		$base = woocommerce_rgb_from_hex( $color );
 		$color = '#';
-	     
+
 	    foreach ($base as $k => $v) :
 	        $amount = 255 - $v; 
 	        $amount = $amount / 100; 
@@ -528,9 +559,37 @@ if (!function_exists('woocommerce_hex_lighter')) {
 	   	return $color;          
 	}
 }
-if (!function_exists('woocommerce_light_or_dark')) {
+
+/**
+ * Detect if we should use a light or dark colour on a background colour
+ **/
+if ( ! function_exists( 'woocommerce_light_or_dark' ) ) {
 	function woocommerce_light_or_dark( $color, $dark = '#000000', $light = '#FFFFFF' ) {
-	    return (hexdec($color) > 0xffffff/2) ? $dark : $light;
+	    //return ( hexdec( $color ) > 0xffffff / 2 ) ? $dark : $light;
+	    $hex = str_replace( '#', '', $color );
+
+		$c_r = hexdec( substr( $hex, 0, 2 ) );
+		$c_g = hexdec( substr( $hex, 2, 2 ) );
+		$c_b = hexdec( substr( $hex, 4, 2 ) );
+		$brightness = ( ( $c_r * 299 ) + ( $c_g * 587 ) + ( $c_b * 114 ) ) / 1000;
+		
+		return $brightness > 155 ? $dark : $light;
+	}
+}
+
+/**
+ * Format string as hex
+ **/
+if ( ! function_exists( 'woocommerce_format_hex' ) ) {
+	function woocommerce_format_hex( $hex ) {
+	    
+	    $hex = trim( str_replace( '#', '', $hex ) );
+	    
+	    if ( strlen( $hex ) == 3 ) {
+			$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+	    }
+	    
+	    if ( $hex ) return '#' . $hex;
 	}
 }
 
@@ -548,33 +607,39 @@ add_action( 'comment_feed_join', 'woocommerce_exclude_order_comments_from_feed_j
 add_action( 'comment_feed_where', 'woocommerce_exclude_order_comments_from_feed_where' );
 
 function woocommerce_exclude_order_comments( $clauses ) {
-	global $wpdb, $typenow;
+	global $wpdb, $typenow, $pagenow;
 	
-	if (is_admin() && $typenow=='shop_order') return $clauses; // Don't hide when viewing orders in admin
+	if ( is_admin() && ( $typenow == 'shop_order' || $pagenow == 'edit-comments.php' ) && current_user_can( 'manage_woocommerce' ) ) 
+		return $clauses; // Don't hide when viewing orders in admin
 	
-	$clauses['join'] = "LEFT JOIN $wpdb->posts ON $wpdb->comments.comment_post_ID = $wpdb->posts.ID";
+	if ( ! $clauses['join'] )
+		$clauses['join'] = '';
 	
-	if ($clauses['where']) $clauses['where'] .= ' AND ';
+	if ( ! strstr( $clauses['join'], "JOIN $wpdb->posts" ) )
+		$clauses['join'] .= " LEFT JOIN $wpdb->posts ON $wpdb->comments.comment_post_ID = $wpdb->posts.ID ";
 	
-	$clauses['where'] .= "
-		$wpdb->posts.post_type NOT IN ('shop_order')
-	";
+	if ( $clauses['where'] ) 
+		$clauses['where'] .= ' AND ';
+	
+	$clauses['where'] .= " $wpdb->posts.post_type NOT IN ('shop_order') ";
 	
 	return $clauses;	
 }
 function woocommerce_exclude_order_comments_from_feed_join( $join ) {
 	global $wpdb;
 	
-    if (!$join) $join = "JOIN $wpdb->posts ON ( $wpdb->comments.comment_post_ID = $wpdb->posts.ID )";
+    if ( ! $join ) 
+    	$join = " LEFT JOIN $wpdb->posts ON $wpdb->comments.comment_post_ID = $wpdb->posts.ID ";
 
     return $join;
 }
 function woocommerce_exclude_order_comments_from_feed_where( $where ) {
 	global $wpdb;
 
-    if ($where) $where .= ' AND ';
+    if ( $where ) 
+    	$where .= ' AND ';
 	
-	$where .= "$wpdb->posts.post_type NOT IN ('shop_order')";
+	$where .= " $wpdb->posts.post_type NOT IN ('shop_order') ";
     
     return $where;
 }
@@ -723,7 +788,7 @@ function woocommerce_terms_clauses($clauses, $taxonomies, $args ) {
 	// wordpress should give us the taxonomies asked when calling the get_terms function. Only apply to categories and pa_ attributes
 	$found = false;
 	foreach ((array) $taxonomies as $taxonomy) :
-		if ($taxonomy=='product_cat' || strstr($taxonomy, 'pa_')) :
+		if ( strstr($taxonomy, 'pa_') || in_array( $taxonomy, apply_filters( 'woocommerce_sortable_taxonomies', array( 'product_cat' ) ) ) ) :
 			$found = true;
 			break;
 		endif;
@@ -758,12 +823,56 @@ function woocommerce_terms_clauses($clauses, $taxonomies, $args ) {
 }
 
 /**
+ * woocommerce_get_product_terms function.
+ *
+ * Gets product terms in the order they are defined in the backend.
+ * 
+ * @access public
+ * @param mixed $object_id
+ * @param mixed $taxonomy
+ * @param mixed $fields ids, names, slugs, all
+ * @return array
+ */
+function woocommerce_get_product_terms( $object_id, $taxonomy, $fields = 'all' ) {
+	
+	if ( ! taxonomy_exists( $taxonomy ) ) 
+		return array();
+	
+	$terms 			= array();
+	$object_terms 	= wp_get_object_terms( $object_id, $taxonomy );
+	$all_terms 		= array_flip( get_terms( $taxonomy, array( 'menu_order' => 'ASC', 'fields' => 'ids' ) ) );
+	
+	switch ( $fields ) {
+		case 'names' :
+			foreach ( $object_terms as $term )
+				$terms[ $all_terms[ $term->term_id ] ] = $term->name;
+			break;
+		case 'ids' :
+			foreach ( $object_terms as $term )
+				$terms[ $all_terms[ $term->term_id ] ] = $term->term_id;
+			break;
+		case 'slugs' :
+			foreach ( $object_terms as $term )
+				$terms[ $all_terms[ $term->term_id ] ] = $term->slug;
+			break;
+		case 'all' :
+			foreach ( $object_terms as $term )
+				$terms[ $all_terms[ $term->term_id ] ] = $term;
+			break;
+	}
+	
+	ksort( $terms );
+	
+	return $terms;
+}
+
+/**
  * WooCommerce Dropdown categories
  * 
  * Stuck with this until a fix for http://core.trac.wordpress.org/ticket/13258
  * We use a custom walker, just like WordPress does
  */
-function woocommerce_product_dropdown_categories( $show_counts = 1, $hierarchal = 1 ) {
+function woocommerce_product_dropdown_categories( $show_counts = 1, $hierarchal = 1, $show_uncategorized = 1 ) {
 	global $wp_query, $woocommerce;
 	
 	include_once( $woocommerce->plugin_path() . '/classes/walkers/class-product-cat-dropdown-walker.php' );
@@ -780,8 +889,12 @@ function woocommerce_product_dropdown_categories( $show_counts = 1, $hierarchal 
 	if (!$terms) return;
 	
 	$output  = "<select name='product_cat' id='dropdown_product_cat'>";
-	$output .= '<option value="">'.__('Select a category', 'woocommerce').'</option>';
+	$output .= '<option value="" ' .  selected( isset( $_GET['product_cat'] ) ? $_GET['product_cat'] : '', '', false ) . '>'.__('Select a category', 'woocommerce').'</option>';
 	$output .= woocommerce_walk_category_dropdown_tree( $terms, 0, $r );
+	
+	if ( $show_uncategorized )
+		$output .= '<option value="0" ' . selected( isset( $_GET['product_cat'] ) ? $_GET['product_cat'] : '', '0', false ) . '>' . __('Uncategorized', 'woocommerce') . '</option>';
+	
 	$output .="</select>";
 	
 	echo $output;
@@ -877,9 +990,10 @@ function woocommerce_order_terms( $the_term, $next_id, $taxonomy, $index=0, $ter
 	// no nextid meaning our term is in last position
 	if( $term_in_level && null === $next_id )
 		$index = woocommerce_set_term_order($id, $index+1, $taxonomy, true);
+
+	wp_cache_flush();
 	
 	return $index;
-	
 }
 
 /**
@@ -942,4 +1056,39 @@ function woocommerce_let_to_num( $size ) {
 	        $ret *= 1024;
     }
     return $ret;
+}
+
+/**
+ * woocommerce_customer_bought_product
+ *
+ * Checks if a user (by email) has bought an item
+ **/
+function woocommerce_customer_bought_product( $customer_email, $user_id, $product_id ) {
+	global $wpdb;
+	
+	$emails = array();
+	
+	if ( $user_id ) {
+		$user = get_user_by( 'id', $user_id );
+		$emails[] = $user->user_email;
+	}
+	
+	if ( is_email( $customer_email ) ) 
+		$emails[] = $customer_email;
+	
+	if ( sizeof( $emails ) == 0 )
+		return false;
+	
+	$orders = $wpdb->get_col( $wpdb->prepare( "SELECT post_id FROM $wpdb->postmeta WHERE ( meta_key = '_billing_email' AND meta_value IN ( '" . implode( "','", array_unique( $emails ) ) . "' ) ) OR ( meta_key = '_customer_user' AND meta_value = %s AND meta_value > 0 )", $user_id ) );
+	
+	foreach ( $orders as $order_id ) {
+		
+		$items = maybe_unserialize( get_post_meta( $order_id, '_order_items', true ) );
+		
+		if ( $items )
+			foreach ( $items as $item )
+				if ( $item['id'] == $product_id || $item['variation_id'] == $product_id )
+					return true;
+			
+	}
 }

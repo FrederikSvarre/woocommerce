@@ -24,8 +24,10 @@ class WC_Settings_API {
 	 * @since 1.0.0
 	 */
 	function admin_options() { ?>
-		<h3><?php echo (isset($this->method_title)) ? $this->method_title : __('Settings','woocommerce') ; ?></h3>
-		<?php echo (isset($this->method_description)) ? wpautop($this->method_description) : ''; ?>
+		<h3><?php echo ( ! empty( $this->method_title ) ) ? $this->method_title : __( 'Settings','woocommerce' ) ; ?></h3>
+		
+		<?php echo ( ! empty( $this->method_description ) ) ? wpautop( $this->method_description ) : ''; ?>
+		
 		<table class="form-table">
 			<?php $this->generate_settings_html(); ?>
 		</table><?php
@@ -39,7 +41,7 @@ class WC_Settings_API {
 	 *
 	 * @since 1.0.0
 	 */
-	function init_form_fields () { return __( 'This function needs to be overridden by your payment gateway class.', 'woocommerce' ); }
+	function init_form_fields() { return __( 'This function needs to be overridden by your payment gateway class.', 'woocommerce' ); }
 	
 	/**
 	 * Admin Panel Options Processing
@@ -52,8 +54,10 @@ class WC_Settings_API {
     	
     	if ( count( $this->errors ) > 0 ) {
     		$this->display_errors();
+    		return false;
     	} else {
     		update_option( $this->plugin_id . $this->id . '_settings', $this->sanitized_fields );
+    		return true;
     	}
     }
     
@@ -74,53 +78,38 @@ class WC_Settings_API {
      * @since 1.0.0
      * @uses get_option(), add_option()
      */
-    function init_settings () {
-    	if ( ! is_array( $this->settings ) ) { return; }
+    function init_settings() {
 
-    	$settings = array();
-    	$existing_settings = get_option( $this->plugin_id . $this->id . '_settings' );
-
-    	if ( ! $existing_settings ) {
+    	// Load form_field settings
+    	if ( $this->form_fields ) {
     	
-	    	// Get defaults
-	    	$defaults = array();
+    		$form_field_settings = ( array ) get_option( $this->plugin_id . $this->id . '_settings' );
 	    	
-	    	foreach ( $this->form_fields as $k => $v ) {
+	    	if ( ! $form_field_settings ) {
 	    		
-	    		// Backwards compatibility
-	    		if ( $value = get_option( $this->plugin_id . $this->id . '_' . $k ) ) :
-	    			$defaults[$k] = $value;
-	    		else :
-	    		
-		    		if ( isset( $v['default'] ) ) {
-		    			$defaults[$k] = $v['default'];
-		    		} else {
-		    			$defaults[$k] = '';
-		    		}
-	    		
-	    		endif;
-	    		
-	    	}
-    	
-    		$existing_settings = $defaults;
+	    		// If there are no settings defined, load defaults
+	    		foreach ( $this->form_fields as $k => $v )
+	    			$form_field_settings[ $k ] = isset( $v['default'] ) ? $v['default'] : '';
+	    	
+	    	} else {
+		    	
+		    	// Prevent "undefined index" errors.
+		    	foreach ( $this->form_fields as $k => $v )
+    				$form_field_settings[ $k ] = isset( $form_field_settings[ $k ] ) ? $form_field_settings[ $k ] : $v['default'];
     		
-    	} else {
-    		// Prevent "undefined index" errors.
-    		foreach ( $existing_settings as $k => $v ) {
-    			if ( ! isset( $existing_settings[$k] ) ) {
-    				$existing_settings[$k] = $v;
-    			}  
-    		}
+	    	}
+	    	
+	    	// Set and decode escaped values
+	    	$this->settings = array_map( array( &$this, 'format_settings' ), $form_field_settings );
     	}
     	
-    	// Set and decode escaped values
-    	$this->settings = array_map( array(&$this, 'format_settings'), $existing_settings );
-    	
-    	if ( isset( $this->settings['enabled'] ) && ( $this->settings['enabled'] == 'yes' ) ) { $this->enabled = 'yes'; }
+    	if ( isset( $this->settings['enabled'] ) && ( $this->settings['enabled'] == 'yes' ) ) 
+    		$this->enabled = 'yes';
+    		
     } // End init_settings()
     
     function format_settings( $value ) {
-    	return (is_array($value)) ? $value : html_entity_decode($value);
+    	return ( is_array( $value ) ) ? $value : html_entity_decode( $value );
     }
     
     /**
@@ -131,9 +120,13 @@ class WC_Settings_API {
      * @since 1.0.0
      * @uses method_exists()
      */
-    function generate_settings_html () {
+    function generate_settings_html ( $form_fields = false ) {
+    	
+    	if ( ! $form_fields ) 
+    		$form_fields = $this->form_fields;
+    		
     	$html = '';
-    	foreach ( $this->form_fields as $k => $v ) {
+    	foreach ( $form_fields as $k => $v ) {
     		if ( ! isset( $v['type'] ) || ( $v['type'] == '' ) ) { $v['type'] == 'text'; } // Default to "text" field type.
     		
     		if ( method_exists( $this, 'generate_' . $v['type'] . '_html' ) ) {
@@ -158,10 +151,11 @@ class WC_Settings_API {
     	$data['css'] = (isset( $data['css'] )) ? $data['css'] : '';
     	
 		$html .= '<tr valign="top">' . "\n";
-			$html .= '<th scope="row" class="titledesc">' . $title . '</th>' . "\n";
+			$html .= '<th scope="row" class="titledesc">';
+			$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">' . $title . '</label>';
+			$html .= '</th>' . "\n";
 			$html .= '<td class="forminp">' . "\n";
 				$html .= '<fieldset><legend class="screen-reader-text"><span>' . $title . '</span></legend>' . "\n";
-				$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">';
                 $value = ( isset( $this->settings[ $key ] ) ) ? esc_attr( $this->settings[ $key ] ) : '';
 				$html .= '<input class="input-text wide-input '.$data['class'].'" type="text" name="' . $this->plugin_id . $this->id . '_' . $key . '" id="' . $this->plugin_id . $this->id . '_' . $key . '" style="'.$data['css'].'" value="' . $value . '" />';
 				if ( isset( $data['description'] ) && $data['description'] != '' ) { $html .= '<span class="description">' . $data['description'] . '</span>' . "\n"; }
@@ -186,10 +180,11 @@ class WC_Settings_API {
     	$data['css'] = (isset( $data['css'] )) ? $data['css'] : '';
     	
 		$html .= '<tr valign="top">' . "\n";
-			$html .= '<th scope="row" class="titledesc">' . $title . '</th>' . "\n";
+			$html .= '<th scope="row" class="titledesc">';
+			$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">' . $title . '</label>';
+			$html .= '</th>' . "\n";
 			$html .= '<td class="forminp">' . "\n";
 				$html .= '<fieldset><legend class="screen-reader-text"><span>' . $title . '</span></legend>' . "\n";
-				$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">';
                 $value = ( isset( $this->settings[ $key ] ) ) ? esc_attr( $this->settings[ $key ] ) : '';
 				$html .= '<input class="input-text wide-input '.$data['class'].'" type="password" name="' . $this->plugin_id . $this->id . '_' . $key . '" id="' . $this->plugin_id . $this->id . '_' . $key . '" style="'.$data['css'].'" value="' . $value . '" />';
 				if ( isset( $data['description'] ) && $data['description'] != '' ) { $html .= '<span class="description">' . $data['description'] . '</span>' . "\n"; }
@@ -215,10 +210,11 @@ class WC_Settings_API {
     	$data['css'] = (isset( $data['css'] )) ? $data['css'] : '';
     	
 		$html .= '<tr valign="top">' . "\n";
-			$html .= '<th scope="row" class="titledesc">' . $title . '</th>' . "\n";
+			$html .= '<th scope="row" class="titledesc">';
+			$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">' . $title . '</label>';
+			$html .= '</th>' . "\n";
 			$html .= '<td class="forminp">' . "\n";
 				$html .= '<fieldset><legend class="screen-reader-text"><span>' . $title . '</span></legend>' . "\n";
-				$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">';
                 $value = ( isset( $this->settings[ $key ] ) ) ? esc_attr( $this->settings[ $key ] ) : '';
 				$html .= '<textarea rows="3" cols="20" class="input-text wide-input '.$data['class'].'" name="' . $this->plugin_id . $this->id . '_' . $key . '" id="' . $this->plugin_id . $this->id . '_' . $key . '" style="'.$data['css'].'">'. $value .'</textarea>';
 				if ( isset( $data['description'] ) && $data['description'] != '' ) { $html .= '<span class="description">' . $data['description'] . '</span>' . "\n"; }
@@ -272,10 +268,11 @@ class WC_Settings_API {
     	$data['css'] = (isset( $data['css'] )) ? $data['css'] : '';
     	
 		$html .= '<tr valign="top">' . "\n";
-			$html .= '<th scope="row" class="titledesc">' . $title . '</th>' . "\n";
+			$html .= '<th scope="row" class="titledesc">';
+			$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">' . $title . '</label>';
+			$html .= '</th>' . "\n";
 			$html .= '<td class="forminp">' . "\n";
 				$html .= '<fieldset><legend class="screen-reader-text"><span>' . $title . '</span></legend>' . "\n";
-				$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">';
 				$html .= '<select name="' . $this->plugin_id . $this->id . '_' . $key . '" id="' . $this->plugin_id . $this->id . '_' . $key . '" style="'.$data['css'].'" class="select '.$data['class'].'">';
 				
 				foreach ($data['options'] as $option_key => $option_value) :
@@ -306,10 +303,11 @@ class WC_Settings_API {
     	$data['css'] = (isset( $data['css'] )) ? $data['css'] : '';
     	
 		$html .= '<tr valign="top">' . "\n";
-			$html .= '<th scope="row" class="titledesc">' . $title . '</th>' . "\n";
+			$html .= '<th scope="row" class="titledesc">';
+			$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">' . $title . '</label>';
+			$html .= '</th>' . "\n";
 			$html .= '<td class="forminp">' . "\n";
 				$html .= '<fieldset><legend class="screen-reader-text"><span>' . $title . '</span></legend>' . "\n";
-				$html .= '<label for="' . $this->plugin_id . $this->id . '_' . $key . '">';
 				$html .= '<select multiple="multiple" style="'.$data['css'].'" class="multiselect '.$data['class'].'" name="' . $this->plugin_id . $this->id . '_' . $key . '[]" id="' . $this->plugin_id . $this->id . '_' . $key . '">';
 				
 				foreach ($data['options'] as $option_key => $option_value) :
@@ -335,8 +333,14 @@ class WC_Settings_API {
      * @since 1.0.0
      * @uses method_exists()
      */
-    function validate_settings_fields () {
-    	foreach ( $this->form_fields as $k => $v ) {
+    function validate_settings_fields( $form_fields = false ) {
+    	
+    	if ( ! $form_fields ) 
+    		$form_fields = $this->form_fields;
+    	
+    	$this->sanitized_fields = array();
+    	
+    	foreach ( $form_fields as $k => $v ) {
     		if ( ! isset( $v['type'] ) || ( $v['type'] == '' ) ) { $v['type'] == 'text'; } // Default to "text" field type.
     		
     		if ( method_exists( $this, 'validate_' . $v['type'] . '_field' ) ) {

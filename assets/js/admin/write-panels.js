@@ -159,25 +159,30 @@ jQuery( function($){
 		if (answer) {
 			
 			// Get row totals
-			var line_subtotals 	= 0;
-			var line_subtotal_taxes 	= 0;
-			var line_totals 	= 0;
-			var cart_discount = 0;
-			var cart_tax 	= 0;
+			var line_subtotals 		= 0;
+			var line_subtotal_taxes = 0;
+			var line_totals 		= 0;
+			var cart_discount 		= 0;
+			var cart_tax 			= 0;
 			var order_shipping 		= parseFloat( $('#_order_shipping').val() );
 			var order_shipping_tax 	= parseFloat( $('#_order_shipping_tax').val() );
 			var order_discount		= parseFloat( $('#_order_discount').val() );
 			
-			if (!order_shipping) order_shipping = 0;
-			if (!order_shipping_tax) order_shipping_tax = 0;
-			if (!order_discount) order_discount = 0;
+			if ( ! order_shipping ) order_shipping = 0;
+			if ( ! order_shipping_tax ) order_shipping_tax = 0;
+			if ( ! order_discount ) order_discount = 0;
 			
 			$('#order_items_list tr.item').each(function(){
 				
 				var line_subtotal 		= parseFloat( $(this).find('input.line_subtotal').val() );
 				var line_subtotal_tax 	= parseFloat( $(this).find('input.line_subtotal_tax').val() );
-				var line_total 	= parseFloat( $(this).find('input.line_total').val() );
-				var line_tax 	= parseFloat( $(this).find('input.line_tax').val() );
+				var line_total 			= parseFloat( $(this).find('input.line_total').val() );
+				var line_tax 			= parseFloat( $(this).find('input.line_tax').val() );
+				
+				if ( ! line_subtotal ) line_subtotal = 0;
+				if ( ! line_subtotal_tax ) line_subtotal_tax = 0;
+				if ( ! line_total ) line_total = 0;
+				if ( ! line_tax ) line_tax = 0;
 				
 				line_subtotals = parseFloat( line_subtotals + line_subtotal );
 				line_subtotal_taxes = parseFloat( line_subtotal_taxes + line_subtotal_tax );
@@ -235,10 +240,10 @@ jQuery( function($){
 			
 			$('table.woocommerce_order_items').block({ message: null, overlayCSS: { background: '#fff url(' + woocommerce_writepanel_params.plugin_url + '/assets/images/ajax-loader.gif) no-repeat center', opacity: 0.6 } });
 		
+			var size = $('table.woocommerce_order_items tbody tr.item').size();
+			
 			$.each( add_item_ids, function( index, value ) {
 			
-				var size = $('table.woocommerce_order_items tbody tr.item').size();
-				
 				var data = {
 					action: 		'woocommerce_add_order_item',
 					item_to_add: 	value,
@@ -261,6 +266,8 @@ jQuery( function($){
 					    $('table.woocommerce_order_items').unblock();
 					}		
 				});
+				
+				size++;
 			
 			});
 
@@ -325,7 +332,7 @@ jQuery( function($){
 						$('input#_billing_address_2').val( info.billing_address_2 );
 						$('input#_billing_city').val( info.billing_city );
 						$('input#_billing_postcode').val( info.billing_postcode );
-						$('input#_billing_country').val( info.billing_country );
+						$('#_billing_country').val( info.billing_country );
 						$('input#_billing_state').val( info.billing_state );
 						$('input#_billing_email').val( info.billing_email );
 						$('input#_billing_phone').val( info.billing_phone );
@@ -375,7 +382,7 @@ jQuery( function($){
 						$('input#_shipping_address_2').val( info.shipping_address_2 );
 						$('input#_shipping_city').val( info.shipping_city );
 						$('input#_shipping_postcode').val( info.shipping_postcode );
-						$('input#_shipping_country').val( info.shipping_country );
+						$('#_shipping_country').val( info.shipping_country );
 						$('input#_shipping_state').val( info.shipping_state );
 					}
 					
@@ -443,7 +450,7 @@ jQuery( function($){
 		// Get value
 		var select_val = $(this).val();
 		
-		$('.hide_if_grouped').show();
+		$('.hide_if_grouped, .hide_if_external').show();
 		$('.show_if_simple, .show_if_variable, .show_if_grouped, .show_if_external').hide();
 		
 		if (select_val=='simple') {
@@ -469,6 +476,7 @@ jQuery( function($){
 			$('.show_if_external').show();
 			$('input#_downloadable').prop('checked', false).change();
 			$('input#_virtual').removeAttr('checked').change();
+			$('.hide_if_external').hide();
 		}
 		
 		$('ul.tabs li:visible').eq(0).find('a').click();
@@ -574,12 +582,12 @@ jQuery( function($){
 	// META BOXES
 	
 		jQuery('.expand_all').click(function(){
-			jQuery(this).closest('.wc-metaboxes-wrapper').find('.wc-metabox table').show();
+			jQuery(this).closest('.wc-metaboxes-wrapper').find('.wc-metabox > table').show();
 			return false;
 		});
 		
 		jQuery('.close_all').click(function(){
-			jQuery(this).closest('.wc-metaboxes-wrapper').find('.wc-metabox table').hide();
+			jQuery(this).closest('.wc-metaboxes-wrapper').find('.wc-metabox > table').hide();
 			return false;
 		});
 		
@@ -766,6 +774,8 @@ jQuery( function($){
 					
 				});
 				
+			} else {
+				$('.woocommerce_attributes').unblock();
 			}
 			
 			return false;

@@ -16,11 +16,11 @@ global $woocommerce;
 		</thead>
 		<tfoot>
 		<?php 
-			if ($totals = $order->get_order_item_totals()) foreach ($totals as $label => $value) :
+			if ( $totals = $order->get_order_item_totals() ) foreach ( $totals as $total ) :
 				?>
 				<tr>
-					<th scope="row" colspan="2"><?php echo $label; ?></th>
-					<td><?php echo $value; ?></td>
+					<th scope="row" colspan="2"><?php echo $total['label']; ?></th>
+					<td><?php echo $total['value']; ?></td>
 				</tr>
 				<?php 
 			endforeach; 
@@ -54,9 +54,9 @@ global $woocommerce;
 						?>
 						<li>
 							<input type="radio" id="payment_method_<?php echo $gateway->id; ?>" class="input-radio" name="payment_method" value="<?php echo esc_attr( $gateway->id ); ?>" <?php if ($gateway->chosen) echo 'checked="checked"'; ?> />
-							<label for="payment_method_<?php echo $gateway->id; ?>"><?php echo $gateway->title; ?> <?php echo $gateway->icon(); ?></label> 
+							<label for="payment_method_<?php echo $gateway->id; ?>"><?php echo $gateway->get_title(); ?> <?php echo $gateway->get_icon(); ?></label> 
 							<?php
-								if ($gateway->has_fields || $gateway->description) : 
+								if ( $gateway->has_fields() || $gateway->get_description() ) : 
 									echo '<div class="payment_box payment_method_'.$gateway->id.'" style="display:none;">';
 									$gateway->payment_fields();
 									echo '</div>';
@@ -76,8 +76,8 @@ global $woocommerce;
 
 		<div class="form-row">
 			<?php $woocommerce->nonce_field('pay')?>
-			<input type="submit" class="button alt" name="woocommerce_pay" id="place_order" value="<?php _e('Pay for order', 'woocommerce'); ?>" />
-
+			<input type="submit" class="button alt" id="place_order" value="<?php _e('Pay for order', 'woocommerce'); ?>" />
+			<input type="hidden" name="woocommerce_pay" value="1" />
 		</div>
 
 	</div>

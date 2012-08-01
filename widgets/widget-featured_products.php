@@ -61,8 +61,17 @@ class WooCommerce_Widget_Featured_Products extends WP_Widget {
 			$number = 15;
 ?>
 
-   		<?php $query_args = array('posts_per_page' => $number, 'no_found_rows' => 1, 'post_status' => 'publish', 'post_type' => 'product',  'meta_key' => '_featured', 'meta_value' => 'yes');
+   		<?php $query_args = array('posts_per_page' => $number, 'no_found_rows' => 1, 'post_status' => 'publish', 'post_type' => 'product' );
 
+		$query_args['meta_query'] = array();
+		
+		$query_args['meta_query'][] = array(
+			'key' => '_featured',
+			'value' => 'yes'
+		);
+	    $query_args['meta_query'][] = $woocommerce->query->stock_status_meta_query();
+	    $query_args['meta_query'][] = $woocommerce->query->visibility_meta_query();
+	    
 		$r = new WP_Query($query_args);
 		
 		if ($r->have_posts()) : ?>
@@ -83,8 +92,14 @@ class WooCommerce_Widget_Featured_Products extends WP_Widget {
 		
 		<?php endif;
 
-		$cache[$args['widget_id']] = ob_get_flush();
+		$content = ob_get_clean();
+
+		if ( isset( $args['widget_id'] ) ) $cache[$args['widget_id']] = $content;
+		
+		echo $content;
+
 		wp_cache_set('widget_featured_products', $cache, 'widget');
+        wp_reset_postdata();
 	}
 
 	/** @see WP_Widget->update */

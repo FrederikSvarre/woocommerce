@@ -61,6 +61,12 @@ class WooCommerce_Widget_Top_Rated_Products extends WP_Widget {
 		add_filter( 'posts_clauses',  array(&$this, 'order_by_rating_post_clauses') );
 		
 		$query_args = array('posts_per_page' => $number, 'no_found_rows' => 1, 'post_status' => 'publish', 'post_type' => 'product' );
+		
+		$query_args['meta_query'] = array();
+	    
+	    $query_args['meta_query'][] = $woocommerce->query->stock_status_meta_query();
+	    $query_args['meta_query'][] = $woocommerce->query->visibility_meta_query();
+		
 		$top_rated_posts = new WP_Query( $query_args );
 		
 		if ($top_rated_posts->have_posts()) :
@@ -86,8 +92,12 @@ class WooCommerce_Widget_Top_Rated_Products extends WP_Widget {
 		wp_reset_query();
 		remove_filter( 'posts_clauses', array(&$this, 'order_by_rating_post_clauses') );
 		
-		$cache[$args['widget_id']] = ob_get_flush();
+		$content = ob_get_clean();
+
+		if ( isset( $args['widget_id'] ) ) $cache[$args['widget_id']] = $content;
 		
+		echo $content;
+				
 		wp_cache_set('widget_top_rated_products', $cache, 'widget');
 	}
 	
@@ -97,7 +107,7 @@ class WooCommerce_Widget_Top_Rated_Products extends WP_Widget {
 		
 		$args['where'] .= " AND $wpdb->commentmeta.meta_key = 'rating' ";
 		
-		$args['join'] = "
+		$args['join'] .= "
 			LEFT JOIN $wpdb->comments ON($wpdb->posts.ID = $wpdb->comments.comment_post_ID)
 			LEFT JOIN $wpdb->commentmeta ON($wpdb->comments.comment_ID = $wpdb->commentmeta.comment_id)
 		";

@@ -64,13 +64,13 @@ function woocommerce_ms_protect_download_rewite_rules( $rewrite ) {
 }
  
 /**
- * Deleting products sync
+ * Deleting posts
  * 
- * Removes variations etc belonging to a deleted post
+ * Removes variations etc belonging to a deleted post, and clears transients
  */
-function woocommerce_delete_product_sync( $id ) {
+function woocommerce_delete_post( $id ) {
 	
-	if (!current_user_can('delete_posts')) return;
+	if ( ! current_user_can( 'delete_posts' ) ) return;
 	
 	if ( $id > 0 ) :
 	
@@ -89,6 +89,8 @@ function woocommerce_delete_product_sync( $id ) {
 		endif;
 	
 	endif;
+	
+	delete_transient( 'woocommerce_processing_order_count' );
 }
 
 /**
@@ -221,4 +223,135 @@ function woocommerce_delete_term( $term_id, $tt_id, $taxonomy ) {
 	global $wpdb;
 	$wpdb->query("DELETE FROM {$wpdb->woocommerce_termmeta} WHERE `woocommerce_term_id` = " . $term_id);
 	
+}
+
+/**
+ * Compile styles
+ */
+function woocommerce_compile_less_styles() {
+	global $woocommerce;
+	
+	$colors 		= get_option( 'woocommerce_frontend_css_colors' );
+	$base_file		= $woocommerce->plugin_path() . '/assets/css/woocommerce-base.less';
+	$less_file		= $woocommerce->plugin_path() . '/assets/css/woocommerce.less';
+	$css_file		= $woocommerce->plugin_path() . '/assets/css/woocommerce.css';
+
+	// Write less file				
+	if ( is_writable( $base_file ) && is_writable( $css_file ) ) {
+		
+		// Colours changed - recompile less
+		if ( ! class_exists( 'lessc' ) ) 
+			include_once('includes/lessc.inc.php');
+		if ( ! class_exists( 'cssmin' ) )
+			include_once('includes/cssmin.inc.php');
+
+		try {
+			// Set default if colours not set
+			if ( ! $colors['primary'] ) $colors['primary'] = '#ad74a2';
+			if ( ! $colors['secondary'] ) $colors['secondary'] = '#f7f6f7';
+			if ( ! $colors['highlight'] ) $colors['highlight'] = '#85ad74';
+			if ( ! $colors['content_bg'] ) $colors['content_bg'] = '#ffffff';
+			if ( ! $colors['subtext'] ) $colors['subtext'] = '#777777';
+		
+			// Write new color to base file
+			$color_rules = "
+@primary: 		" . $colors['primary'] . ";
+@primarytext: 	" . woocommerce_light_or_dark( $colors['primary'], 'desaturate(darken(@primary,50%),18%)', 'desaturate(lighten(@primary,50%),18%)' ) . ";
+
+@secondary: 	" . $colors['secondary'] . ";
+@secondarytext: " . woocommerce_light_or_dark( $colors['secondary'], 'desaturate(darken(@secondary,60%),18%)', 'desaturate(lighten(@secondary,60%),18%)' ) . ";
+
+@highlight: 	" . $colors['highlight'] . ";
+@highlightext:	" . woocommerce_light_or_dark( $colors['highlight'], 'desaturate(darken(@highlight,60%),18%)', 'desaturate(lighten(@highlight,60%),18%)' ) . ";
+
+@contentbg:		" . $colors['content_bg'] . ";
+
+@subtext:		" . $colors['subtext'] . ";
+			";
+			
+			file_put_contents( $base_file, $color_rules );
+		
+		    $less 			= new lessc( $less_file );
+			$compiled_css 	= $less->parse();
+		    
+		    $compiled_css = CssMin::minify( $compiled_css );
+		    
+		    if ( $compiled_css )
+		    	file_put_contents( $css_file, $compiled_css );
+		    
+		} catch ( exception $ex ) {
+			wp_die( __('Could not compile woocommerce.less:', 'woocommerce') . ' ' . $ex->getMessage() );
+		}
+	}
+}
+
+/**
+ * Add extra bulk action options to mark orders as complete or processing
+ * Using Javascript until WordPress core fixes: http://core.trac.wordpress.org/ticket/16031
+ **/
+function woocommerce_bulk_admin_footer() {
+	global $post_type;
+
+	if ( 'shop_order' == $post_type ) {
+		?>
+		<script type="text/javascript">
+		jQuery(document).ready(function() {
+			jQuery('<option>').val('mark_processing').text('<?php _e( 'Mark processing', 'woocommerce' )?>').appendTo("select[name='action']");
+			jQuery('<option>').val('mark_processing').text('<?php _e( 'Mark processing', 'woocommerce' )?>').appendTo("select[name='action2']");
+
+			jQuery('<option>').val('mark_completed').text('<?php _e( 'Mark completed', 'woocommerce' )?>').appendTo("select[name='action']");
+			jQuery('<option>').val('mark_completed').text('<?php _e( 'Mark completed', 'woocommerce' )?>').appendTo("select[name='action2']");
+		});
+		</script>
+		<?php
+	}
+}
+
+/**
+ * Process the new bulk actions for changing order status
+ **/
+function woocommerce_order_bulk_action() {
+	$wp_list_table = _get_list_table( 'WP_Posts_List_Table' );
+	$action = $wp_list_table->current_action();
+
+	switch ( $action ) {
+		case 'mark_completed':
+			$new_status = 'completed';
+			$report_action = 'marked_completed';
+			break;
+		case 'mark_processing':
+			$new_status = 'processing';
+			$report_action = 'marked_processing';
+			break;
+		default:
+			return;
+	}
+
+	$changed = 0;
+
+	foreach( $_REQUEST['post'] as $post_id ) {
+		$order = new WC_Order( $post_id );
+		$order->update_status( $new_status, __( 'Order status changed by bulk edit:', 'woocommerce' ) );
+		$changed++;
+	}
+
+	$sendback = add_query_arg( array( 'post_type' => 'shop_order', $report_action => $changed, 'ids' => join( ',', $post_ids ) ), '' );
+	wp_redirect( $sendback );
+	exit();
+}
+
+/**
+ * Show confirmation message that order status changed for number of orders 
+ **/
+function woocommerce_order_bulk_admin_notices() {
+	global $post_type, $pagenow;
+	
+	if ( isset( $_REQUEST['marked_completed'] ) || isset( $_REQUEST['marked_processing'] ) ) {
+		$number = isset( $_REQUEST['marked_processing'] ) ? $_REQUEST['marked_processing'] : $_REQUEST['marked_completed'];
+
+		if ( 'edit.php' == $pagenow && 'shop_order' == $post_type ) {
+			$message = sprintf( _n( 'Order status changed.', '%s order statuses changed.', $number ), number_format_i18n( $number ) );
+			echo '<div class="updated"><p>' . $message . '</p></div>';
+		}
+	}
 }

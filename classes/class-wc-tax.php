@@ -16,11 +16,12 @@ class WC_Tax {
 	 * Get the tax rates as an array
 	 */
 	function get_tax_rates() {
-		if (!is_array($this->parsed_rates)) :
+		if ( ! is_array( $this->parsed_rates ) ) {
+		
 			global $woocommerce;
 			
-			$tax_rates 			= (array) get_option('woocommerce_tax_rates');
-			$local_tax_rates 	= (array) get_option('woocommerce_local_tax_rates');
+			$tax_rates 			= array_filter( (array) get_option('woocommerce_tax_rates') );
+			$local_tax_rates 	= array_filter( (array) get_option('woocommerce_local_tax_rates') );
 			
 			$parsed_rates 		= array();
 			$flat_rates			= array();
@@ -94,9 +95,11 @@ class WC_Tax {
 				
 			endforeach;			
 			
-			$this->rates = $flat_rates;
+			$this->rates 		= $flat_rates;
 			$this->parsed_rates = $parsed_rates;
-		endif;
+			
+			do_action( 'woocommerce_get_tax_rates', $this );
+		}
 	}
 	
 	/**
@@ -112,36 +115,34 @@ class WC_Tax {
 	function find_rates( $country = '', $state = '', $postcode = '', $tax_class = '' ) {
 		$this->get_tax_rates();
 		
-		if (!$country) return array();
+		if ( ! $country ) return array();
 		
-		if (!$state) $state = '*';
+		if ( ! $state ) $state = '*';
 		
 		$tax_class = sanitize_title($tax_class);
-		if (!$tax_class) $tax_class = '*';
+		if ( ! $tax_class ) $tax_class = '*';
 
 		$found_rates = array();
 
 		// Look for a state specific rule
-		if (isset($this->parsed_rates[ $country ][ $state ])) :
+		if ( isset( $this->parsed_rates[ $country ][ $state ][ $tax_class ] ) || isset( $this->parsed_rates[ $country ][ $state ][ '*' ] ) ) {
 			
 			// Look for tax class specific rule
-			if (isset($this->parsed_rates[ $country ][ $state ][ $tax_class ])) :
+			if ( isset( $this->parsed_rates[ $country ][ $state ][ $tax_class ] ) )
 				$found_rates = $this->parsed_rates[ $country ][ $state ][ $tax_class ];
-			else :
+			else
 				$found_rates = $this->parsed_rates[ $country ][ $state ][ '*' ];
-			endif;
 		
 		// Default to * if not state specific rules are found
-		elseif (isset($this->parsed_rates[ $country ][ '*' ])) :
+		} elseif ( isset( $this->parsed_rates[ $country ][ '*' ] ) ) {
 		
 			// Look for tax class specific rule
-			if (isset($this->parsed_rates[ $country ][ '*' ][ $tax_class ])) :
+			if ( isset( $this->parsed_rates[ $country ][ '*' ][ $tax_class ] ) )
 				$found_rates = $this->parsed_rates[ $country ][ '*' ][ $tax_class ];
-			else :
+			elseif ( isset( $this->parsed_rates[ $country ][ '*' ][ '*' ] ) )
 				$found_rates = $this->parsed_rates[ $country ][ '*' ][ '*' ];
-			endif;
 			
-		endif;
+		}
 		
 		// Now we have an array of matching rates, lets filter this based on postcode
 		$matched_tax_rates = array();
@@ -195,10 +196,10 @@ class WC_Tax {
 		
 		$this->get_tax_rates();
 		
-		$tax_class = sanitize_title($tax_class);
+		$tax_class = sanitize_title( $tax_class );
 		
-		/* Checkout uses customer location, otherwise use store base rate */
-		if ( defined('WOOCOMMERCE_CHECKOUT') && WOOCOMMERCE_CHECKOUT ) :
+		/* Checkout uses customer location for the tax rates. Also, if shipping has been calculated, use the customers address. */
+		if ( ( defined('WOOCOMMERCE_CHECKOUT') && WOOCOMMERCE_CHECKOUT ) || $woocommerce->customer->has_calculated_shipping() ) {
 			
 			$country 	= $woocommerce->customer->get_shipping_country();
 			$state 		= $woocommerce->customer->get_shipping_state();
@@ -208,11 +209,11 @@ class WC_Tax {
 			
 			return $matched_tax_rates;
 		
-		else :
+		} else {
 			
 			return $this->get_shop_base_rate( $tax_class );
 			
-		endif;
+		}
 
 	}
 	
@@ -249,18 +250,18 @@ class WC_Tax {
 		
 		$this->get_tax_rates();
 		
-		if (defined('WOOCOMMERCE_CHECKOUT') && WOOCOMMERCE_CHECKOUT) :
+		if ( ( defined('WOOCOMMERCE_CHECKOUT') && WOOCOMMERCE_CHECKOUT ) || $woocommerce->customer->has_calculated_shipping() ) {
 			$country 	= $woocommerce->customer->get_shipping_country();
 			$state 		= $woocommerce->customer->get_shipping_state();
 			$postcode   = $woocommerce->customer->get_shipping_postcode();
-		else :
+		} else {
 			$country 	= $woocommerce->countries->get_base_country();
 			$state 		= $woocommerce->countries->get_base_state();
 			$postcode   = '';
-		endif;
+		}
 		
 		// If we are here then shipping is taxable - work it out
-		if ( !is_null($tax_class) ) :
+		if ( ! is_null($tax_class) ) :
 			
 			$matched_tax_rates = array();
 			
@@ -351,7 +352,7 @@ class WC_Tax {
 	 * @param	bool	passed price includes tax
 	 * @return  array	array of rates/amounts
 	 */
-	function calc_tax( $price, $rates, $price_includes_tax = true ) {
+	function calc_tax( $price, $rates, $price_includes_tax = true, $supress_rounding = false ) {
 		
 		$price = $price * 100;	// To avoid float rounding errors, work with integers (pence)
 		
@@ -391,7 +392,7 @@ class WC_Tax {
 				$tax_amount = ($tax_amount / 100);
 				
 				// Rounding
-				if ( get_option( 'woocommerce_tax_round_at_subtotal' ) == 'no' ) :
+				if ( get_option( 'woocommerce_tax_round_at_subtotal' ) == 'no' && ! $supress_rounding ) :
 					$tax_amount = round( $tax_amount, 2 );
 				endif;
 				
@@ -413,7 +414,7 @@ class WC_Tax {
 				$tax_amount = ($tax_amount / 100);
 				
 				// Rounding
-				if ( get_option( 'woocommerce_tax_round_at_subtotal' ) == 'no' ) :
+				if ( get_option( 'woocommerce_tax_round_at_subtotal' ) == 'no' && ! $supress_rounding ) :
 					$tax_amount = round( $tax_amount, 2 );
 				endif;
 				
@@ -436,7 +437,7 @@ class WC_Tax {
 				$tax_amount = ($tax_amount / 100);
 				
 				// Rounding
-				if ( get_option( 'woocommerce_tax_round_at_subtotal' ) == 'no' ) :
+				if ( get_option( 'woocommerce_tax_round_at_subtotal' ) == 'no' && ! $supress_rounding ) :
 					$tax_amount = round( $tax_amount, 2 );
 				endif;
 				
