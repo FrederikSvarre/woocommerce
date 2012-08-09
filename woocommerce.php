@@ -562,6 +562,8 @@ class Woocommerce {
 		/**
 		 * Taxonomies
 		 **/
+		do_action( 'woocommerce_register_taxonomy' );
+
 		$admin_only_query_var = ( is_admin() ) ? true : false;
 
 		register_taxonomy( 'product_type',
@@ -736,6 +738,8 @@ class Woocommerce {
 	    /**
 		 * Post Types
 		 **/
+		do_action( 'woocommerce_register_post_type' );
+
 		register_post_type( "product",
 			array(
 				'labels' => array(
@@ -780,10 +784,7 @@ class Woocommerce {
 			)
 		);
 
-		// Sort out attachment urls
-		$attachment_base = get_option('woocommerce_prepend_shop_page_to_products') == 'yes' ? trailingslashit( $base_slug ) : trailingslashit( _x( 'product', 'slug', 'woocommerce' ) );
-
-		add_rewrite_rule( '^' . $attachment_base . '([^/]*)/([^/]*)/([^/]*)/?', 'index.php?attachment=$matches[3]', 'top' );
+		// Sort out attachment urls (removed, breaks pagination) no alternatives add_rewrite_rule( '^' . $attachment_base . '([^/]*)/([^/]*)/([^/]*)/?', 'index.php?attachment=$matches[3]', 'top' );
 
 		register_post_type( "product_variation",
 			array(
